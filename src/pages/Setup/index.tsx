@@ -2,7 +2,7 @@
  * Setup Wizard Page
  * First-time setup experience for new users
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -47,17 +47,32 @@ const steps: SetupStep[] = [
     title: 'AI Provider',
     description: 'Configure your AI service',
   },
-  // Channel step removed - users can configure channels later in Settings
+  // Skills selection removed - auto-install essential components
   {
-    id: 'skills',
-    title: 'Choose Skills',
-    description: 'Select your skill bundles',
+    id: 'installing',
+    title: 'Setting Up',
+    description: 'Installing essential components',
   },
   {
     id: 'complete',
     title: 'All Set!',
     description: 'ClawX is ready to use',
   },
+];
+
+// Default skills to auto-install (no additional API keys required)
+interface DefaultSkill {
+  id: string;
+  name: string;
+  description: string;
+}
+
+const defaultSkills: DefaultSkill[] = [
+  { id: 'opencode', name: 'OpenCode', description: 'AI coding assistant backend' },
+  { id: 'python-env', name: 'Python Environment', description: 'Python runtime for skills' },
+  { id: 'code-assist', name: 'Code Assist', description: 'Code analysis and suggestions' },
+  { id: 'file-tools', name: 'File Tools', description: 'File operations and management' },
+  { id: 'terminal', name: 'Terminal', description: 'Shell command execution' },
 ];
 
 // Provider types
@@ -77,49 +92,7 @@ const providers: Provider[] = [
 ];
 
 // NOTE: Channel types moved to Settings > Channels page
-
-// Skill bundle types
-interface SkillBundle {
-  id: string;
-  name: string;
-  icon: string;
-  description: string;
-  skills: string[];
-  recommended?: boolean;
-}
-
-const skillBundles: SkillBundle[] = [
-  { 
-    id: 'productivity', 
-    name: 'Productivity', 
-    icon: '📋', 
-    description: 'Task management, reminders, notes',
-    skills: ['todo', 'reminder', 'notes', 'calendar'],
-    recommended: true,
-  },
-  { 
-    id: 'developer', 
-    name: 'Developer', 
-    icon: '💻', 
-    description: 'Code assistance, git, terminal',
-    skills: ['code-assist', 'git', 'terminal', 'docs'],
-    recommended: true,
-  },
-  { 
-    id: 'smart-home', 
-    name: 'Smart Home', 
-    icon: '🏠', 
-    description: 'Home automation, IoT control',
-    skills: ['lights', 'thermostat', 'security', 'iot'],
-  },
-  { 
-    id: 'media', 
-    name: 'Media', 
-    icon: '🎨', 
-    description: 'Image generation, music, video',
-    skills: ['image-gen', 'music', 'video', 'transcribe'],
-  },
-];
+// NOTE: Skill bundles moved to Settings > Skills page - auto-install essential skills during setup
 
 export function Setup() {
   const navigate = useNavigate();
@@ -129,8 +102,8 @@ export function Setup() {
   // Setup state
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
-  // Channel selection moved to Settings page
-  const [selectedBundles, setSelectedBundles] = useState<Set<string>>(new Set(['productivity', 'developer']));
+  // Installation state for the Installing step
+  const [installedSkills, setInstalledSkills] = useState<string[]>([]);
   
   const step = steps[currentStep];
   const isFirstStep = currentStep === 0;
@@ -158,6 +131,15 @@ export function Setup() {
     navigate('/');
   };
   
+  // Auto-proceed when installation is complete
+  const handleInstallationComplete = useCallback((skills: string[]) => {
+    setInstalledSkills(skills);
+    // Auto-proceed to next step after a short delay
+    setTimeout(() => {
+      setCurrentStep((i) => i + 1);
+    }, 1000);
+  }, []);
+  
   // Update canProceed based on current step
   useEffect(() => {
     switch (currentStep) {
@@ -170,14 +152,14 @@ export function Setup() {
       case 2: // Provider
         setCanProceed(selectedProvider !== null && apiKey.length > 0);
         break;
-      case 3: // Skills
-        setCanProceed(selectedBundles.size > 0);
+      case 3: // Installing
+        setCanProceed(false); // Cannot manually proceed, auto-proceeds when done
         break;
       case 4: // Complete
         setCanProceed(true);
         break;
     }
-  }, [currentStep, selectedProvider, apiKey, selectedBundles]);
+  }, [currentStep, selectedProvider, apiKey]);
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">
@@ -243,57 +225,49 @@ export function Setup() {
               />
             )}
             {currentStep === 3 && (
-              <SkillsContent
-                bundles={skillBundles}
-                selectedBundles={selectedBundles}
-                onToggleBundle={(id) => {
-                  const newSet = new Set(selectedBundles);
-                  if (newSet.has(id)) {
-                    newSet.delete(id);
-                  } else {
-                    newSet.add(id);
-                  }
-                  setSelectedBundles(newSet);
-                }}
+              <InstallingContent
+                skills={defaultSkills}
+                onComplete={handleInstallationComplete}
               />
             )}
             {currentStep === 4 && (
               <CompleteContent
                 selectedProvider={selectedProvider}
-                selectedBundles={selectedBundles}
-                bundles={skillBundles}
+                installedSkills={installedSkills}
               />
             )}
           </div>
           
-          {/* Navigation */}
-          <div className="flex justify-between">
-            <div>
-              {!isFirstStep && (
-                <Button variant="ghost" onClick={handleBack}>
-                  <ChevronLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {!isLastStep && currentStep !== 1 && (
-                <Button variant="ghost" onClick={handleSkip}>
-                  Skip Setup
-                </Button>
-              )}
-              <Button onClick={handleNext} disabled={!canProceed}>
-                {isLastStep ? (
-                  'Get Started'
-                ) : (
-                  <>
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </>
+          {/* Navigation - hidden during installation step */}
+          {currentStep !== 3 && (
+            <div className="flex justify-between">
+              <div>
+                {!isFirstStep && (
+                  <Button variant="ghost" onClick={handleBack}>
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
                 )}
-              </Button>
+              </div>
+              <div className="flex gap-2">
+                {!isLastStep && currentStep !== 1 && (
+                  <Button variant="ghost" onClick={handleSkip}>
+                    Skip Setup
+                  </Button>
+                )}
+                <Button onClick={handleNext} disabled={!canProceed}>
+                  {isLastStep ? (
+                    'Get Started'
+                  ) : (
+                    <>
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-2" />
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -676,55 +650,148 @@ function ProviderContent({
 }
 
 // NOTE: ChannelContent component moved to Settings > Channels page
+// NOTE: SkillsContent component removed - auto-install essential skills
 
-interface SkillsContentProps {
-  bundles: SkillBundle[];
-  selectedBundles: Set<string>;
-  onToggleBundle: (id: string) => void;
+// Installation status for each skill
+type InstallStatus = 'pending' | 'installing' | 'completed' | 'failed';
+
+interface SkillInstallState {
+  id: string;
+  name: string;
+  description: string;
+  status: InstallStatus;
 }
 
-function SkillsContent({ bundles, selectedBundles, onToggleBundle }: SkillsContentProps) {
+interface InstallingContentProps {
+  skills: DefaultSkill[];
+  onComplete: (installedSkills: string[]) => void;
+}
+
+function InstallingContent({ skills, onComplete }: InstallingContentProps) {
+  const [skillStates, setSkillStates] = useState<SkillInstallState[]>(
+    skills.map((s) => ({ ...s, status: 'pending' as InstallStatus }))
+  );
+  const [overallProgress, setOverallProgress] = useState(0);
+  const installStarted = useRef(false);
+  
+  // Simulate installation process
+  useEffect(() => {
+    if (installStarted.current) return;
+    installStarted.current = true;
+    
+    const installSkills = async () => {
+      const installedIds: string[] = [];
+      
+      for (let i = 0; i < skills.length; i++) {
+        // Set current skill to installing
+        setSkillStates((prev) => 
+          prev.map((s, idx) => 
+            idx === i ? { ...s, status: 'installing' } : s
+          )
+        );
+        
+        // Simulate installation time (1-2 seconds per skill)
+        const installTime = 1000 + Math.random() * 1000;
+        await new Promise((resolve) => setTimeout(resolve, installTime));
+        
+        // Mark as completed
+        setSkillStates((prev) => 
+          prev.map((s, idx) => 
+            idx === i ? { ...s, status: 'completed' } : s
+          )
+        );
+        installedIds.push(skills[i].id);
+        
+        // Update overall progress
+        setOverallProgress(Math.round(((i + 1) / skills.length) * 100));
+      }
+      
+      // Small delay before completing
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      onComplete(installedIds);
+    };
+    
+    installSkills();
+  }, [skills, onComplete]);
+  
+  const getStatusIcon = (status: InstallStatus) => {
+    switch (status) {
+      case 'pending':
+        return <div className="h-5 w-5 rounded-full border-2 border-slate-500" />;
+      case 'installing':
+        return <Loader2 className="h-5 w-5 text-primary animate-spin" />;
+      case 'completed':
+        return <CheckCircle2 className="h-5 w-5 text-green-400" />;
+      case 'failed':
+        return <XCircle className="h-5 w-5 text-red-400" />;
+    }
+  };
+  
+  const getStatusText = (skill: SkillInstallState) => {
+    switch (skill.status) {
+      case 'pending':
+        return <span className="text-slate-500">Pending</span>;
+      case 'installing':
+        return <span className="text-primary">Installing...</span>;
+      case 'completed':
+        return <span className="text-green-400">Installed</span>;
+      case 'failed':
+        return <span className="text-red-400">Failed</span>;
+    }
+  };
+  
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold mb-2">Choose Skill Bundles</h2>
+    <div className="space-y-6">
+      <div className="text-center">
+        <div className="text-4xl mb-4">⚙️</div>
+        <h2 className="text-xl font-semibold mb-2">Installing Essential Components</h2>
         <p className="text-slate-300">
-          Select pre-configured skill packages to enable
+          Setting up the tools needed to power your AI assistant
         </p>
       </div>
       
-      <div className="grid grid-cols-2 gap-4">
-        {bundles.map((bundle) => (
-          <button
-            key={bundle.id}
-            onClick={() => onToggleBundle(bundle.id)}
+      {/* Progress bar */}
+      <div className="space-y-2">
+        <div className="flex justify-between text-sm">
+          <span className="text-slate-400">Progress</span>
+          <span className="text-primary">{overallProgress}%</span>
+        </div>
+        <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+          <motion.div
+            className="h-full bg-primary"
+            initial={{ width: 0 }}
+            animate={{ width: `${overallProgress}%` }}
+            transition={{ duration: 0.3 }}
+          />
+        </div>
+      </div>
+      
+      {/* Skill list */}
+      <div className="space-y-2 max-h-64 overflow-y-auto">
+        {skillStates.map((skill) => (
+          <motion.div
+            key={skill.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
             className={cn(
-              'p-4 rounded-lg bg-white/5 hover:bg-white/10 transition-all text-left relative',
-              selectedBundles.has(bundle.id) && 'ring-2 ring-primary bg-white/10'
+              'flex items-center justify-between p-3 rounded-lg',
+              skill.status === 'installing' ? 'bg-white/10' : 'bg-white/5'
             )}
           >
-            <div className="flex items-start justify-between">
-              <span className="text-2xl">{bundle.icon}</span>
-              {selectedBundles.has(bundle.id) && (
-                <CheckCircle2 className="h-5 w-5 text-primary" />
-              )}
+            <div className="flex items-center gap-3">
+              {getStatusIcon(skill.status)}
+              <div>
+                <p className="font-medium">{skill.name}</p>
+                <p className="text-xs text-slate-400">{skill.description}</p>
+              </div>
             </div>
-            <p className="font-medium mt-2">{bundle.name}</p>
-            <p className="text-sm text-slate-400 mt-1">{bundle.description}</p>
-            <p className="text-xs text-slate-500 mt-2">
-              {bundle.skills.length} skills
-            </p>
-            {bundle.recommended && (
-              <span className="absolute top-2 right-2 text-xs bg-primary px-2 py-0.5 rounded">
-                Recommended
-              </span>
-            )}
-          </button>
+            {getStatusText(skill)}
+          </motion.div>
         ))}
       </div>
       
       <p className="text-sm text-slate-400 text-center">
-        Selected: {selectedBundles.size} bundle{selectedBundles.size !== 1 ? 's' : ''}
+        This may take a few moments...
       </p>
     </div>
   );
@@ -732,17 +799,16 @@ function SkillsContent({ bundles, selectedBundles, onToggleBundle }: SkillsConte
 
 interface CompleteContentProps {
   selectedProvider: string | null;
-  selectedBundles: Set<string>;
-  bundles: SkillBundle[];
+  installedSkills: string[];
 }
 
-function CompleteContent({ selectedProvider, selectedBundles, bundles }: CompleteContentProps) {
+function CompleteContent({ selectedProvider, installedSkills }: CompleteContentProps) {
   const gatewayStatus = useGatewayStore((state) => state.status);
   
   const providerData = providers.find((p) => p.id === selectedProvider);
-  const selectedBundleNames = bundles
-    .filter((b) => selectedBundles.has(b.id))
-    .map((b) => b.name)
+  const installedSkillNames = defaultSkills
+    .filter((s) => installedSkills.includes(s.id))
+    .map((s) => s.name)
     .join(', ');
   
   return (
@@ -762,9 +828,9 @@ function CompleteContent({ selectedProvider, selectedBundles, bundles }: Complet
           </span>
         </div>
         <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
-          <span>Skills</span>
+          <span>Components</span>
           <span className="text-green-400">
-            {selectedBundleNames || 'None selected'}
+            {installedSkillNames || `${installedSkills.length} installed`}
           </span>
         </div>
         <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
@@ -776,7 +842,7 @@ function CompleteContent({ selectedProvider, selectedBundles, bundles }: Complet
       </div>
       
       <p className="text-sm text-slate-400">
-        You can connect messaging channels later in Settings → Channels
+        You can customize skills and connect channels in Settings
       </p>
     </div>
   );

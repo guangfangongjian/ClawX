@@ -814,11 +814,13 @@ const steps: SetupStep[] = [
   },
   // NOTE: Channel step removed - 通道连接移至 Settings > Channels 页面
   // 用户可在完成初始设置后自行配置消息通道
+  // NOTE: Skills selection step removed - 自动安装必要组件
+  // 用户无需手动选择，核心组件自动安装
   {
-    id: 'skills',
-    title: '选择技能包',
-    description: '挑选预装技能，稍后可调整',
-    component: SkillStep,
+    id: 'installing',
+    title: '安装组件',
+    description: '正在安装必要的 AI 组件',
+    component: InstallingStep,
   },
   {
     id: 'complete',
