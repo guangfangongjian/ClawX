@@ -7,10 +7,11 @@
 
 ### Completed:
 * [commit_1] Project skeleton - Electron + React + TypeScript foundation (v0.1.0-alpha)
+* [commit_2] Gateway refinements - Auto-reconnection, health checks, better state management
 
 ### Plan:
 1. ~~Initialize project structure~~ ✅
-2. Add Gateway process management refinements
+2. ~~Add Gateway process management refinements~~ ✅
 3. Implement Setup wizard with actual functionality
 4. Add Provider configuration (API Key management)
 5. Implement Channel connection flows

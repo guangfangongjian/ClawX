@@ -28,6 +28,9 @@ interface SettingsState {
   sidebarCollapsed: boolean;
   devModeUnlocked: boolean;
   
+  // Setup
+  setupComplete: boolean;
+  
   // Actions
   setTheme: (theme: Theme) => void;
   setLanguage: (language: string) => void;
@@ -40,6 +43,7 @@ interface SettingsState {
   setAutoDownloadUpdate: (value: boolean) => void;
   setSidebarCollapsed: (value: boolean) => void;
   setDevModeUnlocked: (value: boolean) => void;
+  markSetupComplete: () => void;
   resetSettings: () => void;
 }
 
@@ -55,6 +59,7 @@ const defaultSettings = {
   autoDownloadUpdate: false,
   sidebarCollapsed: false,
   devModeUnlocked: false,
+  setupComplete: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(
@@ -73,6 +78,7 @@ export const useSettingsStore = create<SettingsState>()(
       setAutoDownloadUpdate: (autoDownloadUpdate) => set({ autoDownloadUpdate }),
       setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setDevModeUnlocked: (devModeUnlocked) => set({ devModeUnlocked }),
+      markSetupComplete: () => set({ setupComplete: true }),
       resetSettings: () => set(defaultSettings),
     }),
     {
