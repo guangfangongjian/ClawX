@@ -1,6 +1,26 @@
-# Before:
+# ClawX Build Process
+
+## Progress
+
+### Before:
 * add `ClawX-项目架构与版本大纲.md`
 
-# Plan:
+### Completed:
+* [commit_1] Project skeleton - Electron + React + TypeScript foundation (v0.1.0-alpha)
 
-Initialize the project structure according to `ClawX-项目架构与版本大纲.md`, and add the fundamental dependencies as specified in the documentation and technology stack.
+### Plan:
+1. ~~Initialize project structure~~ ✅
+2. Add Gateway process management refinements
+3. Implement Setup wizard with actual functionality
+4. Add Provider configuration (API Key management)
+5. Implement Channel connection flows
+6. Add auto-update functionality
+7. Packaging and distribution setup
+
+## Version Milestones
+
+| Version | Status | Description |
+|---------|--------|-------------|
+| v0.1.0-alpha | ✅ Done | Core architecture, basic UI framework |
+| v0.5.0-beta | Pending | Setup wizard MVP, Node.js installer |
+| v1.0.0 | Pending | Production ready, all core features |
