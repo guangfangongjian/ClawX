@@ -4,6 +4,7 @@
  */
 import { app, BrowserWindow, nativeImage, session, shell } from 'electron';
 import { join } from 'path';
+import { mkdirSync } from 'fs';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createTray } from './tray';
@@ -14,6 +15,19 @@ import { logger } from '../utils/logger';
 import { warmupNetworkOptimization } from '../utils/uv-env';
 
 import { ClawHubService } from '../gateway/clawhub';
+
+// For packaged app, store user data next to the executable
+// instead of %APPDATA% to avoid path encoding issues with non-ASCII usernames
+if (app.isPackaged) {
+  const exeDir = join(app.getPath('exe'), '..');
+  const portableDataDir = join(exeDir, 'data');
+  try {
+    mkdirSync(portableDataDir, { recursive: true });
+    app.setPath('userData', portableDataDir);
+  } catch {
+    // Fall back to default userData if no write permission
+  }
+}
 
 // Disable GPU acceleration for better compatibility
 app.disableHardwareAcceleration();
