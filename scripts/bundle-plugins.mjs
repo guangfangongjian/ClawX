@@ -40,6 +40,26 @@ for (const { npmName, pluginId } of PLUGINS) {
   echo`   Copying ${npmName} -> build/plugins/${pluginId}/`;
   fs.cpSync(pkgReal, dest, { recursive: true, dereference: true });
 
+  // Bundle plugin dependencies into plugin's node_modules
+  const pluginPkg = JSON.parse(fs.readFileSync(path.join(dest, 'package.json'), 'utf-8'));
+  const deps = Object.keys(pluginPkg.dependencies || {});
+  if (deps.length > 0) {
+    const pluginNodeModules = path.join(dest, 'node_modules');
+    fs.mkdirSync(pluginNodeModules, { recursive: true });
+    for (const dep of deps) {
+      const depLink = path.join(NODE_MODULES, ...dep.split('/'));
+      if (!fs.existsSync(depLink)) {
+        echo`   ⚠️  dependency ${dep} not found, skipping`;
+        continue;
+      }
+      const depReal = fs.realpathSync(depLink);
+      const depDest = path.join(pluginNodeModules, ...dep.split('/'));
+      fs.mkdirSync(path.dirname(depDest), { recursive: true });
+      fs.cpSync(depReal, depDest, { recursive: true, dereference: true });
+      echo`   📎 bundled dependency: ${dep}`;
+    }
+  }
+
   // Verify essential files
   const hasManifest = fs.existsSync(path.join(dest, 'openclaw.plugin.json'));
   const hasPkg = fs.existsSync(path.join(dest, 'package.json'));

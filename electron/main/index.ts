@@ -21,11 +21,30 @@ import { ClawHubService } from '../gateway/clawhub';
 if (app.isPackaged) {
   const exeDir = join(app.getPath('exe'), '..');
   const portableDataDir = join(exeDir, 'data');
+  let redirected = false;
   try {
     mkdirSync(portableDataDir, { recursive: true });
+    // Write test to verify the directory is actually writable
+    const testFile = join(portableDataDir, '.write-test');
+    require('fs').writeFileSync(testFile, '', 'utf-8');
+    require('fs').unlinkSync(testFile);
     app.setPath('userData', portableDataDir);
+    redirected = true;
   } catch {
-    // Fall back to default userData if no write permission
+    // Program Files may not be writable, fall back
+  }
+  if (!redirected) {
+    // Use LOCALAPPDATA as fallback (avoids non-ASCII issues in APPDATA/Roaming path)
+    const localAppData = process.env.LOCALAPPDATA;
+    if (localAppData) {
+      const fallbackDir = join(localAppData, 'ClawX-Data');
+      try {
+        mkdirSync(fallbackDir, { recursive: true });
+        app.setPath('userData', fallbackDir);
+      } catch {
+        // Final fallback: default Electron userData
+      }
+    }
   }
 }
 
