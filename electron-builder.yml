@@ -99,10 +99,7 @@ win:
       to: bin
   icon: resources/icons/icon.ico
   target:
-    - target: nsis
-      arch:
-        - x64
-        - arm64
+    - nsis
 
 nsis:
   oneClick: false
@@ -123,17 +120,9 @@ nsis:
 linux:
   icon: resources/icons
   target:
-    - target: AppImage
-      arch:
-        - x64
-        - arm64
-    - target: deb
-      arch:
-        - x64
-        - arm64
-    - target: rpm
-      arch:
-        - x64
+    - AppImage
+    - deb
+    - rpm
   category: Utility
   maintainer: ClawX Team <team@clawx.app>
   vendor: ClawX
