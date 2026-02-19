@@ -43,6 +43,11 @@ Whether you're automating workflows, managing AI-powered channels, or scheduling
 
 ClawX comes pre-configured with best-practice model providers and natively supports Windows as well as multi-language settings. Of course, you can also fine-tune advanced configurations via **Settings → Advanced → Developer Mode**.
 
+This project is maintained by the forked branch of [Guangfan Co-construction](https://github.com/guangfangongjian). As a core user of [Guangfan Technology](https://guangfan.com/), we aim to link the efforts of Guangfan official, core users and the open-source community to jointly build the Guangfan ecosystem.
+Team members include [Peiban](https://github.com/peiban666) and [Shanhe Jinzeng Jiaren / Naihe](https://github.com/naiheSH).
+
+Compared with the upstream ClawX, this branch adds support for the [Hi Light](https://github.com/Gongcong/hi-light-plugin) application plugin, which is integrated into the project. Just as ClawX simplifies the use of OpenClaw for users, we provide more convenient use of Hi Light for Guangfan users.
+
 ---
 ## Screenshot
 
