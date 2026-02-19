@@ -36,14 +36,10 @@ asarUnpack:
   - "**/*.node"
 
 # Auto-update configuration
-# Primary: Alibaba Cloud OSS (fast for Chinese users, used for auto-update)
-# Fallback: GitHub Releases (backup, used when OSS is unavailable)
+# Primary: GitHub Releases from organization repo
 publish:
-  - provider: generic
-    url: https://oss.intelli-spectrum.com/latest
-    useMultipleRangeRequest: false
   - provider: github
-    owner: ValueCell-ai
+    owner: guangfangongjian
     repo: ClawX
     releaseType: release
 
