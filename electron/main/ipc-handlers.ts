@@ -46,7 +46,7 @@ import { checkUvInstalled, installUv, setupManagedPython } from '../utils/uv-set
 import { updateSkillConfig, getSkillConfig, getAllSkillConfigs } from '../utils/skill-config';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
 import { getProviderConfig } from '../utils/provider-registry';
-import { installBundledPlugin, isPluginInstalled } from '../utils/plugin-install';
+import { installBundledPlugin, isPluginInstalled, ensureRequiredPlugins } from '../utils/plugin-install';
 
 /**
  * Register all IPC handlers
@@ -646,17 +646,13 @@ function registerOpenClawHandlers(): void {
     try {
       logger.info('channel:saveConfig', { channelType, keys: Object.keys(config || {}) });
 
-      // Auto-install bundled plugin if this channel requires one
-      if (PLUGIN_CHANNELS.includes(channelType) && !isPluginInstalled(channelType)) {
-        logger.info(`Auto-installing bundled plugin for channel: ${channelType}`);
-        const installResult = installBundledPlugin(channelType);
-        if (!installResult.success) {
-          logger.error(`Plugin install failed for ${channelType}:`, installResult.error);
-          return { success: false, error: `Plugin installation failed: ${installResult.error}` };
-        }
-      }
-
       saveChannelConfig(channelType, config);
+
+      // For plugin channels, ensure bundled plugin path is configured for Gateway discovery
+      if (PLUGIN_CHANNELS.includes(channelType)) {
+        logger.info(`Auto-installing bundled plugin for channel: ${channelType}`);
+        ensureRequiredPlugins();
+      }
       return { success: true };
     } catch (error) {
       console.error('Failed to save channel config:', error);

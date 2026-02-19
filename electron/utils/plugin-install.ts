@@ -83,13 +83,10 @@ function isBundledNewer(pluginId: string): boolean {
 }
 
 /**
- * Ensure all required plugins are installed based on configured channels in openclaw.json.
- * Call this before Gateway startup to prevent config validation failures.
- *
- * Two-pronged approach:
- * 1. Copy bundled plugin to ~/.openclaw/extensions/<pluginId>/
- * 2. Add the plugin path to plugins.loadPaths in openclaw.json so the Gateway
- *    can discover it even if the normal extensions directory scan fails.
+ * Ensure all required plugins are discoverable by the Gateway.
+ * Instead of copying plugins to ~/.openclaw/extensions/ (which may fail on
+ * non-ASCII usernames), we point plugins.load.paths directly at the bundled
+ * plugin directory inside app resources. This avoids all path-encoding issues.
  */
 export function ensureRequiredPlugins(): void {
     const { writeFileSync } = require('node:fs') as typeof import('node:fs');
@@ -117,31 +114,26 @@ export function ensureRequiredPlugins(): void {
         logger.info('Pre-flight: removed invalid plugins.loadPaths key');
     }
 
+    const bundledPluginsDir = getBundledPluginsDir();
+
     for (const pluginId of Object.keys(BUNDLED_PLUGINS)) {
         if (!channels[pluginId]) continue;
 
-        // Step 1: Copy plugin files to extensions directory
-        if (!isPluginInstalled(pluginId)) {
-            logger.info(`Pre-flight: installing bundled plugin "${pluginId}"`);
-            const result = installBundledPlugin(pluginId);
-            if (!result.success) {
-                logger.error(`Pre-flight: plugin "${pluginId}" install failed: ${result.error}`);
-                continue;
-            }
-        } else if (isBundledNewer(pluginId)) {
-            logger.info(`Pre-flight: updating plugin "${pluginId}" to newer bundled version`);
-            installBundledPlugin(pluginId);
+        // Point directly to the bundled plugin in app resources (no copy needed)
+        const bundledPluginPath = join(bundledPluginsDir, BUNDLED_PLUGINS[pluginId] || pluginId);
+
+        if (!existsSync(bundledPluginPath)) {
+            logger.error(`Pre-flight: bundled plugin not found at "${bundledPluginPath}"`);
+            continue;
         }
 
-        // Verify the installed plugin files
-        const installedDir = join(getExtensionsDir(), pluginId);
-        const hasPkg = existsSync(join(installedDir, 'package.json'));
-        const hasManifest = existsSync(join(installedDir, 'openclaw.plugin.json'));
-        const hasDist = existsSync(join(installedDir, 'dist', 'index.js'));
-        logger.info(`Pre-flight: plugin "${pluginId}" verification: pkg=${hasPkg} manifest=${hasManifest} dist=${hasDist}`);
+        // Verify the bundled plugin files
+        const hasPkg = existsSync(join(bundledPluginPath, 'package.json'));
+        const hasManifest = existsSync(join(bundledPluginPath, 'openclaw.plugin.json'));
+        const hasDist = existsSync(join(bundledPluginPath, 'dist', 'index.js'));
+        logger.info(`Pre-flight: bundled plugin "${pluginId}" verification: pkg=${hasPkg} manifest=${hasManifest} dist=${hasDist}`);
 
-        // Step 2: Ensure plugin path is in plugins.load.paths for guaranteed discovery
-        const pluginPath = join(getExtensionsDir(), pluginId);
+        // Ensure plugin path is in plugins.load.paths for Gateway discovery
         if (!config.plugins || typeof config.plugins !== 'object') {
             config.plugins = {};
         }
@@ -154,10 +146,12 @@ export function ensureRequiredPlugins(): void {
             load.paths = [];
         }
         const loadPaths = load.paths as string[];
-        if (!loadPaths.includes(pluginPath)) {
-            loadPaths.push(pluginPath);
+        if (!loadPaths.includes(bundledPluginPath)) {
+            // Remove any old extension directory paths
+            load.paths = loadPaths.filter((p: string) => !p.includes('.openclaw'));
+            (load.paths as string[]).push(bundledPluginPath);
             configDirty = true;
-            logger.info(`Pre-flight: added "${pluginPath}" to plugins.load.paths`);
+            logger.info(`Pre-flight: set plugins.load.paths to bundled path "${bundledPluginPath}"`);
         }
     }
 
@@ -165,7 +159,7 @@ export function ensureRequiredPlugins(): void {
     if (configDirty) {
         try {
             writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
-            logger.info('Pre-flight: updated openclaw.json with plugin loadPaths');
+            logger.info('Pre-flight: updated openclaw.json with bundled plugin paths');
         } catch (err) {
             logger.error('Pre-flight: failed to update config with loadPaths', err);
         }
