@@ -20,9 +20,6 @@ jobs:
           - os: windows-latest
             platform: win
             artifact: ClawX-Windows
-          - os: macos-latest
-            platform: mac
-            artifact: ClawX-macOS
           - os: ubuntu-latest
             platform: linux
             artifact: ClawX-Linux
@@ -64,13 +61,7 @@ jobs:
 
       - name: Build & Package
         env:
-          # macOS code signing (set these secrets in GitHub repo settings)
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Windows code signing
+          # Windows code signing (set these secrets in GitHub repo settings)
           WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # GitHub token for publish
@@ -83,8 +74,6 @@ jobs:
           name: ${{ matrix.artifact }}
           path: |
             release/*.exe
-            release/*.dmg
-            release/*.zip
             release/*.AppImage
             release/*.deb
             release/*.rpm
