@@ -43,6 +43,14 @@
 
 ClawX 预置了最佳实践的模型供应商配置，原生支持 Windows 平台以及多语言设置。当然，你也可以通过 **设置 → 高级 → 开发者模式** 来进行精细的高级配置。
 
+本项目由 [光帆共建](https://github.com/guangfangongjian) 
+fork分支维护，作为[光帆科技](https://guangfan.com/)核心用户，旨在联动光帆官方、核心用户及开源社区力量，共建光帆生态。
+
+团队成员包括
+[陪伴](https://github.com/peiban666) 与[山河尽赠佳人/奈何](https://github.com/naiheSH) 
+
+相较于上游ClawX而言，本分支增加了[Hi Light](https://github.com/Gongcong/hi-light-plugin)应用插件支持，集成在项目中，用户因为ClawX简化OpenClaw使用，我们为光帆用户提供Hi Light更便捷的使用。
+
 ---
 
 ## 截图预览
