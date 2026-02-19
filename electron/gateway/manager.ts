@@ -122,6 +122,7 @@ export class GatewayManager extends EventEmitter {
   private reconnectConfig: ReconnectConfig;
   private shouldReconnect = true;
   private startLock = false;
+  private startAbort: AbortController | null = null;
   private lastSpawnSummary: string | null = null;
   private pendingRequests: Map<string, {
     resolve: (value: unknown) => void;
@@ -206,6 +207,7 @@ export class GatewayManager extends EventEmitter {
     }
     
     this.startLock = true;
+    this.startAbort = new AbortController();
     logger.info(`Gateway start requested (port=${this.status.port})`);
     this.lastSpawnSummary = null;
     this.shouldReconnect = true;
@@ -271,6 +273,7 @@ export class GatewayManager extends EventEmitter {
       throw error;
     } finally {
       this.startLock = false;
+      this.startAbort = null;
     }
   }
   
@@ -281,6 +284,11 @@ export class GatewayManager extends EventEmitter {
     logger.info('Gateway stop requested');
     // Disable auto-reconnect
     this.shouldReconnect = false;
+
+    // Abort any in-flight start/waitForReady loop
+    if (this.startAbort) {
+      this.startAbort.abort();
+    }
     
     // Clear all timers
     this.clearAllTimers();
@@ -336,8 +344,18 @@ export class GatewayManager extends EventEmitter {
   async restart(): Promise<void> {
     logger.debug('Gateway restart requested');
     await this.stop();
+    // Wait for any in-flight start() to finish unwinding after abort
+    const maxWait = 10;
+    for (let i = 0; i < maxWait && this.startLock; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    if (this.startLock) {
+      logger.warn('Gateway restart: startLock still held after waiting, forcing release');
+      this.startLock = false;
+      this.startAbort = null;
+    }
     // Brief delay before restart
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 500));
     await this.start();
   }
   
@@ -681,8 +699,18 @@ export class GatewayManager extends EventEmitter {
    */
   private async waitForReady(retries = 600, interval = 1000): Promise<void> {
     for (let i = 0; i < retries; i++) {
-      // Early exit if the gateway process has already exited
-      if (this.process && (this.process.exitCode !== null || this.process.signalCode !== null)) {
+      // Abort if stop() was called while we are still waiting
+      if (this.startAbort?.signal.aborted) {
+        logger.info('waitForReady aborted by stop request');
+        throw new Error('Gateway start aborted');
+      }
+
+      // Early exit if the gateway process has already exited (process set to null by exit handler)
+      if (!this.process) {
+        logger.error('Gateway process exited before ready (process=null)');
+        throw new Error('Gateway process exited before becoming ready');
+      }
+      if (this.process.exitCode !== null || this.process.signalCode !== null) {
         const code = this.process.exitCode;
         const signal = this.process.signalCode;
         logger.error(`Gateway process exited before ready (${this.formatExit(code, signal)})`);
