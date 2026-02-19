@@ -16,54 +16,37 @@ import { warmupNetworkOptimization } from '../utils/uv-env';
 
 import { ClawHubService } from '../gateway/clawhub';
 
-// For packaged app, store user data next to the executable
-// instead of %APPDATA% to avoid path encoding issues with non-ASCII usernames
+// For packaged app, redirect userData to %LOCALAPPDATA%/ClawX-Data
+// instead of %APPDATA%/ClawX to avoid non-ASCII path issues.
+// NOTE: Do NOT store userData inside the install directory — NSIS reinstall
+// runs the uninstaller first and wipes the entire install folder.
 if (app.isPackaged) {
   const defaultUserData = app.getPath('userData'); // %APPDATA%/ClawX (before redirect)
-  const exeDir = join(app.getPath('exe'), '..');
-  const portableDataDir = join(exeDir, 'data');
-  let newUserData: string | null = null;
+  const localAppData = process.env.LOCALAPPDATA;
 
-  try {
-    mkdirSync(portableDataDir, { recursive: true });
-    // Write test to verify the directory is actually writable
-    const testFile = join(portableDataDir, '.write-test');
-    writeFileSync(testFile, '', 'utf-8');
-    unlinkSync(testFile);
-    newUserData = portableDataDir;
-  } catch {
-    // Program Files may not be writable, fall back
-  }
+  if (localAppData) {
+    const newUserData = join(localAppData, 'ClawX-Data');
+    try {
+      mkdirSync(newUserData, { recursive: true });
 
-  if (!newUserData) {
-    // Use LOCALAPPDATA as fallback (avoids non-ASCII issues in APPDATA/Roaming path)
-    const localAppData = process.env.LOCALAPPDATA;
-    if (localAppData) {
-      const fallbackDir = join(localAppData, 'ClawX-Data');
-      try {
-        mkdirSync(fallbackDir, { recursive: true });
-        newUserData = fallbackDir;
-      } catch {
-        // Final fallback: default Electron userData
-      }
-    }
-  }
-
-  if (newUserData) {
-    // Migrate data from default %APPDATA%/ClawX on first redirect
-    // so upgrades from older versions don't lose config / setup state
-    if (newUserData !== defaultUserData) {
-      const hasOldData = existsSync(join(defaultUserData, 'Local Storage'));
-      const hasNewData = existsSync(join(newUserData, 'Local Storage'));
-      if (hasOldData && !hasNewData) {
-        try {
-          cpSync(defaultUserData, newUserData, { recursive: true, force: false });
-        } catch {
-          // Migration failed, user will see setup wizard again
+      // Migrate from default %APPDATA%/ClawX on first redirect
+      // so upgrades from older versions preserve config / setup state
+      if (newUserData !== defaultUserData) {
+        const hasOldData = existsSync(join(defaultUserData, 'Local Storage'));
+        const hasNewData = existsSync(join(newUserData, 'Local Storage'));
+        if (hasOldData && !hasNewData) {
+          try {
+            cpSync(defaultUserData, newUserData, { recursive: true, force: false });
+          } catch {
+            // Migration failed, user will see setup wizard again
+          }
         }
       }
+
+      app.setPath('userData', newUserData);
+    } catch {
+      // Final fallback: default Electron userData
     }
-    app.setPath('userData', newUserData);
   }
 }
 
