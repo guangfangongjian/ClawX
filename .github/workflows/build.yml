@@ -72,8 +72,8 @@ jobs:
       - name: Build frontend & bundle
         run: |
           pnpm run build:vite
-          npx zx scripts/bundle-openclaw.mjs
-          npx zx scripts/bundle-plugins.mjs
+          pnpm exec zx scripts/bundle-openclaw.mjs
+          pnpm exec zx scripts/bundle-plugins.mjs
 
       - name: Package
         env:
@@ -82,7 +82,7 @@ jobs:
           WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # GitHub token for publish
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --${{ matrix.platform }} ${{ matrix.arch }}
+        run: pnpm exec electron-builder --${{ matrix.platform }} ${{ matrix.arch }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
