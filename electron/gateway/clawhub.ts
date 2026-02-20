@@ -137,9 +137,9 @@ export class ClawHubService {
      */
     async search(params: ClawHubSearchParams): Promise<ClawHubSkillResult[]> {
         try {
-            // If query is empty, use 'explore' to show trending skills
+            // If query is empty, use 'explore' to show all available skills
             if (!params.query || params.query.trim() === '') {
-                return this.explore({ limit: params.limit });
+                return this.explore({ limit: params.limit || 500 });
             }
 
             const args = ['search', params.query];
