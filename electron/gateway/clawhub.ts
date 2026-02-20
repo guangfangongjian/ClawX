@@ -299,15 +299,22 @@ export class ClawHubService {
             console.error('ClawHub list error:', error);
         }
 
-        // 2. Always merge filesystem scan to catch skills missing from lock.json
+        // 2. Use filesystem as source of truth: only report skills that exist on disk.
+        //    lock.json may contain stale entries from failed installs.
         const diskResults = this.listInstalledFromDisk();
+        const diskSlugs = new Set(diskResults.map(d => d.slug));
+
+        // Keep CLI results only if the directory exists on disk (prefer CLI version info)
+        const verified = results.filter(r => diskSlugs.has(r.slug));
+
+        // Add any disk-only skills not in CLI results
         for (const disk of diskResults) {
-            if (!results.some(r => r.slug === disk.slug)) {
-                results.push(disk);
+            if (!verified.some(r => r.slug === disk.slug)) {
+                verified.push(disk);
             }
         }
 
-        return results;
+        return verified;
     }
 
     /**
