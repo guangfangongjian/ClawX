@@ -33,6 +33,11 @@ export interface ClawHubSkillResult {
     stars?: number;
 }
 
+export interface ExploreApiResult {
+    items: ClawHubSkillResult[];
+    nextCursor: string | null;
+}
+
 export class ClawHubService {
     private workDir: string;
     private cliPath: string;
@@ -183,7 +188,7 @@ export class ClawHubService {
     }
 
     /**
-     * Explore trending skills
+     * Explore trending skills (CLI fallback)
      */
     async explore(params: { limit?: number } = {}): Promise<ClawHubSkillResult[]> {
         try {
@@ -215,6 +220,52 @@ export class ClawHubService {
         } catch (error) {
             console.error('ClawHub explore error:', error);
             return [];
+        }
+    }
+
+    /**
+     * Explore skills via HTTP API with cursor pagination.
+     * Bypasses CLI limit of 200 to load all skills.
+     */
+    async exploreApi(params: { cursor?: string; limit?: number; sort?: string } = {}): Promise<ExploreApiResult> {
+        const registry = 'https://clawhub.ai';
+        const limit = Math.min(params.limit || 200, 200);
+        const url = new URL('/api/v1/skills', registry);
+        url.searchParams.set('limit', String(limit));
+        if (params.cursor) {
+            url.searchParams.set('cursor', params.cursor);
+        }
+        if (params.sort) {
+            url.searchParams.set('sort', params.sort);
+        }
+
+        try {
+            const res = await fetch(url.toString());
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            const data = await res.json() as {
+                items: Array<{
+                    slug: string;
+                    displayName: string;
+                    summary?: string | null;
+                    latestVersion?: { version: string } | null;
+                    updatedAt?: number;
+                }>;
+                nextCursor: string | null;
+            };
+
+            const items: ClawHubSkillResult[] = data.items.map(item => ({
+                slug: item.slug,
+                name: item.slug,
+                description: item.summary || '',
+                version: item.latestVersion?.version || '0.0.0',
+            }));
+
+            return { items, nextCursor: data.nextCursor };
+        } catch (error) {
+            console.error('ClawHub API explore error:', error);
+            return { items: [], nextCursor: null };
         }
     }
 

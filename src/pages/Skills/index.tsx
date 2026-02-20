@@ -529,11 +529,15 @@ export function Skills() {
     disableSkill,
     searchResults,
     searchSkills,
+    exploreSkills,
+    loadMoreSkills,
     installSkill,
     uninstallSkill,
     searching,
     searchError,
-    installing
+    installing,
+    marketplaceNextCursor,
+    loadingMore,
   } = useSkillsStore();
   const { t } = useTranslation('skills');
   const gatewayStatus = useGatewayStore((state) => state.status);
@@ -650,9 +654,9 @@ export function Skills() {
   useEffect(() => {
     if (activeTab === 'marketplace' && marketplaceQuery === '' && marketplaceDiscoveryAttemptedRef.current) {
       setMarketplacePage(1);
-      searchSkills('');
+      exploreSkills();
     }
-  }, [marketplaceQuery, activeTab, searchSkills]);
+  }, [marketplaceQuery, activeTab, exploreSkills]);
 
   // Handle install
   const handleInstall = useCallback(async (slug: string) => {
@@ -667,7 +671,7 @@ export function Skills() {
     }
   }, [installSkill, enableSkill, t]);
 
-  // Initial marketplace load (Discovery)
+  // Initial marketplace load (Discovery) - use HTTP API for full list
   useEffect(() => {
     if (activeTab !== 'marketplace') {
       return;
@@ -682,8 +686,8 @@ export function Skills() {
       return;
     }
     marketplaceDiscoveryAttemptedRef.current = true;
-    searchSkills('');
-  }, [activeTab, marketplaceQuery, searching, searchSkills]);
+    exploreSkills();
+  }, [activeTab, marketplaceQuery, searching, exploreSkills]);
 
   // Handle uninstall
   const handleUninstall = useCallback(async (slug: string) => {
@@ -1033,6 +1037,23 @@ export function Skills() {
                     <span className="text-sm text-muted-foreground ml-2">
                       {searchResults.length} {t('marketplace.totalSkills', { defaultValue: 'skills' })}
                     </span>
+                  </div>
+                )}
+                {/* Load More */}
+                {marketplaceNextCursor && !marketplaceQuery.trim() && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => loadMoreSkills()}
+                      disabled={loadingMore}
+                      className="min-w-[200px]"
+                    >
+                      {loadingMore ? (
+                        <LoadingSpinner size="sm" />
+                      ) : (
+                        <>{t('marketplace.loadMore', { defaultValue: 'Load more skills' })}</>  
+                      )}
+                    </Button>
                   </div>
                 )}
               </>

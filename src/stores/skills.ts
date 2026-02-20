@@ -42,10 +42,14 @@ interface SkillsState {
   searchError: string | null;
   installing: Record<string, boolean>; // slug -> boolean
   error: string | null;
+  marketplaceNextCursor: string | null;
+  loadingMore: boolean;
 
   // Actions
   fetchSkills: () => Promise<void>;
   searchSkills: (query: string) => Promise<void>;
+  exploreSkills: () => Promise<void>;
+  loadMoreSkills: () => Promise<void>;
   installSkill: (slug: string, version?: string) => Promise<void>;
   uninstallSkill: (slug: string) => Promise<void>;
   enableSkill: (skillId: string) => Promise<void>;
@@ -62,6 +66,8 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
   searchError: null,
   installing: {},
   error: null,
+  marketplaceNextCursor: null,
+  loadingMore: false,
 
   fetchSkills: async () => {
     // Only show loading state if we have no skills yet (initial load)
@@ -151,7 +157,7 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
     try {
       const result = await window.electron.ipcRenderer.invoke('clawhub:search', { query }) as { success: boolean; results?: MarketplaceSkill[]; error?: string };
       if (result.success) {
-        set({ searchResults: result.results || [] });
+        set({ searchResults: result.results || [], marketplaceNextCursor: null });
       } else {
         throw new Error(result.error || 'Search failed');
       }
@@ -159,6 +165,47 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       set({ searchError: String(error) });
     } finally {
       set({ searching: false });
+    }
+  },
+
+  exploreSkills: async () => {
+    set({ searching: true, searchError: null, searchResults: [] });
+    try {
+      const result = await window.electron.ipcRenderer.invoke('clawhub:explore', {}) as {
+        success: boolean; items?: MarketplaceSkill[]; nextCursor?: string | null; error?: string;
+      };
+      if (result.success) {
+        set({ searchResults: result.items || [], marketplaceNextCursor: result.nextCursor || null });
+      } else {
+        throw new Error(result.error || 'Explore failed');
+      }
+    } catch (error) {
+      set({ searchError: String(error) });
+    } finally {
+      set({ searching: false });
+    }
+  },
+
+  loadMoreSkills: async () => {
+    const { marketplaceNextCursor, loadingMore, searchResults } = get();
+    if (!marketplaceNextCursor || loadingMore) return;
+    set({ loadingMore: true });
+    try {
+      const result = await window.electron.ipcRenderer.invoke('clawhub:explore', {
+        cursor: marketplaceNextCursor,
+      }) as {
+        success: boolean; items?: MarketplaceSkill[]; nextCursor?: string | null; error?: string;
+      };
+      if (result.success && result.items) {
+        set({
+          searchResults: [...searchResults, ...result.items],
+          marketplaceNextCursor: result.nextCursor || null,
+        });
+      }
+    } catch (error) {
+      console.error('Load more skills error:', error);
+    } finally {
+      set({ loadingMore: false });
     }
   },
 

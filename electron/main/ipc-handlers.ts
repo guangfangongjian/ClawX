@@ -1349,6 +1349,16 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
     }
   });
 
+  // Explore skills via HTTP API (cursor pagination)
+  ipcMain.handle('clawhub:explore', async (_, params: { cursor?: string; limit?: number; sort?: string }) => {
+    try {
+      const result = await clawHubService.exploreApi(params);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, items: [], nextCursor: null, error: String(error) };
+    }
+  });
+
   // Install skill
   ipcMain.handle('clawhub:install', async (_, params: ClawHubInstallParams) => {
     try {
