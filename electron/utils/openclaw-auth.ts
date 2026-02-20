@@ -323,19 +323,19 @@ export function setOpenClawDefaultModelWithOverride(
         ? (providers[provider] as Record<string, unknown>)
         : {};
 
-    const existingModels = Array.isArray(existingProvider.models)
-      ? (existingProvider.models as Array<Record<string, unknown>>)
-      : [];
-    const mergedModels = [...existingModels];
-    if (modelId && !mergedModels.some((m) => m.id === modelId)) {
-      mergedModels.push({ id: modelId, name: modelId });
+    // For runtime-configured providers (custom/ollama), replace the model list
+    // with only the currently selected model. This avoids stale entries when the
+    // user removes a model in the UI.
+    const freshModels: Array<Record<string, unknown>> = [];
+    if (modelId) {
+      freshModels.push({ id: modelId, name: modelId });
     }
 
     const nextProvider: Record<string, unknown> = {
       ...existingProvider,
       baseUrl: override.baseUrl,
       api: override.api,
-      models: mergedModels,
+      models: freshModels,
     };
     if (override.apiKeyEnv) {
       nextProvider.apiKey = override.apiKeyEnv;
