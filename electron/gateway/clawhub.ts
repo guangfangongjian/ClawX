@@ -228,7 +228,7 @@ export class ClawHubService {
      * Bypasses CLI limit of 200 to load all skills.
      */
     async exploreApi(params: { cursor?: string; limit?: number; sort?: string } = {}): Promise<ExploreApiResult> {
-        const registry = 'https://clawhub.ai';
+        const registry = 'https://wry-manatee-359.convex.site';
         const limit = Math.min(params.limit || 200, 200);
         const url = new URL('/api/v1/skills', registry);
         url.searchParams.set('limit', String(limit));
