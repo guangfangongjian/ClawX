@@ -291,9 +291,12 @@ export class ClawHubService {
             console.error('ClawHub list error:', error);
         }
 
-        // 2. Filesystem fallback: scan skills directory when CLI returns empty
-        if (results.length === 0) {
-            results = this.listInstalledFromDisk();
+        // 2. Always merge filesystem scan to catch skills missing from lock.json
+        const diskResults = this.listInstalledFromDisk();
+        for (const disk of diskResults) {
+            if (!results.some(r => r.slug === disk.slug)) {
+                results.push(disk);
+            }
         }
 
         return results;
