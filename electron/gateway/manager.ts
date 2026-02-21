@@ -30,6 +30,7 @@ import {
   type DeviceIdentity,
 } from '../utils/device-identity';
 import { ensureRequiredPlugins } from '../utils/plugin-install';
+import { ensureTokenOptimization } from '../utils/openclaw-auth';
 
 /**
  * Gateway connection status
@@ -211,6 +212,9 @@ export class GatewayManager extends EventEmitter {
     logger.info(`Gateway start requested (port=${this.status.port})`);
     this.lastSpawnSummary = null;
     this.shouldReconnect = true;
+
+    // Ensure token-optimization config (contextPruning, compaction) before Gateway reads it
+    try { ensureTokenOptimization(); } catch { /* non-fatal */ }
 
     // Manual start should override and cancel any pending reconnect timer.
     if (this.reconnectTimer) {

@@ -363,5 +363,68 @@ export function setOpenClawDefaultModelWithOverride(
   );
 }
 
+/**
+ * Ensure token-optimization defaults are present in openclaw.json.
+ * Called on every Gateway start so the config is always up-to-date.
+ *
+ * - contextPruning: auto-trims old tool_result messages (saves ~30-60% tokens)
+ * - compaction.mode "safeguard": already the Gateway default, ensured here
+ */
+export function ensureTokenOptimization(): void {
+  const configPath = join(homedir(), '.openclaw', 'openclaw.json');
+
+  let config: Record<string, unknown> = {};
+  try {
+    if (existsSync(configPath)) {
+      config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    }
+  } catch {
+    return; // Config not ready yet, skip silently
+  }
+
+  const agents = (config.agents || {}) as Record<string, unknown>;
+  const defaults = (agents.defaults || {}) as Record<string, unknown>;
+
+  let changed = false;
+
+  // Ensure contextPruning is configured
+  if (!defaults.contextPruning) {
+    defaults.contextPruning = {
+      mode: 'cache-ttl',
+      ttl: '1h',
+      softTrimRatio: 0.6,
+      hardClearRatio: 0.85,
+      keepLastAssistants: 2,
+      softTrim: {
+        maxChars: 4000,
+        headChars: 500,
+        tailChars: 500,
+      },
+      hardClear: {
+        enabled: true,
+        placeholder: '[content cleared to save tokens]',
+      },
+    };
+    changed = true;
+  }
+
+  // Ensure compaction safeguard is set
+  if (!defaults.compaction) {
+    defaults.compaction = { mode: 'safeguard' };
+    changed = true;
+  }
+
+  if (changed) {
+    agents.defaults = defaults;
+    config.agents = agents;
+    try {
+      writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+      console.log('[ensureTokenOptimization] Applied token optimization defaults to openclaw.json');
+    } catch (err) {
+      console.error('[ensureTokenOptimization] Failed to write config:', err);
+    }
+  }
+}
+
 // Re-export for backwards compatibility
 export { getProviderEnvVar } from './provider-registry';
