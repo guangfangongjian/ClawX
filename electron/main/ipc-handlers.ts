@@ -45,7 +45,7 @@ import {
 import { checkUvInstalled, installUv, setupManagedPython } from '../utils/uv-setup';
 import { updateSkillConfig, getSkillConfig, getAllSkillConfigs } from '../utils/skill-config';
 import { whatsAppLoginManager } from '../utils/whatsapp-login';
-import { getProviderConfig } from '../utils/provider-registry';
+import { getProviderConfig, getProviderEnvVar } from '../utils/provider-registry';
 import { installBundledPlugin, isPluginInstalled, ensureRequiredPlugins } from '../utils/plugin-install';
 
 /**
@@ -995,9 +995,11 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
 
           if (provider.type === 'custom' || provider.type === 'ollama') {
             // For runtime-configured providers, use user-entered base URL/api.
+            const envVar = getProviderEnvVar(provider.type);
             setOpenClawDefaultModelWithOverride(provider.type, modelOverride, {
               baseUrl: provider.baseUrl,
               api: 'openai-completions',
+              apiKeyEnv: envVar,
             });
           } else {
             setOpenClawDefaultModel(provider.type, modelOverride);
