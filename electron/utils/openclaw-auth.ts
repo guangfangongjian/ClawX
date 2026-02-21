@@ -414,6 +414,17 @@ export function ensureTokenOptimization(): void {
     changed = true;
   }
 
+  // Disable block streaming so channels (Feishu, Telegram, etc.) only receive
+  // the final combined reply instead of one message per thinking step.
+  if (defaults.blockStreamingDefault === undefined) {
+    defaults.blockStreamingDefault = 'off';
+    changed = true;
+  }
+  if (defaults.blockStreamingBreak === undefined) {
+    defaults.blockStreamingBreak = 'message_end';
+    changed = true;
+  }
+
   if (changed) {
     agents.defaults = defaults;
     config.agents = agents;
