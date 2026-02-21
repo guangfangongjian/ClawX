@@ -837,6 +837,29 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
         }
       }
 
+      // If the saved provider is the current default, also update openclaw.json
+      // so that changes to baseUrl/model take effect without re-clicking "set default".
+      try {
+        const defaultProvider = await getDefaultProvider();
+        if (defaultProvider && defaultProvider.id === config.id) {
+          const modelOverride = config.model
+            ? `${config.type}/${config.model}`
+            : undefined;
+          if (config.type === 'custom' || config.type === 'ollama') {
+            const envVar = getProviderEnvVar(config.type);
+            setOpenClawDefaultModelWithOverride(config.type, modelOverride, {
+              baseUrl: config.baseUrl,
+              api: 'openai-completions',
+              apiKeyEnv: envVar,
+            });
+          } else {
+            setOpenClawDefaultModel(config.type, modelOverride);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to sync openclaw.json after provider:save:', err);
+      }
+
       restartGatewayIfRunning('provider:save');
       return { success: true };
     } catch (error) {
