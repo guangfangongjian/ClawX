@@ -6,12 +6,14 @@
 !macro customUnInstall
   ; Ask user if they want to completely remove all user data
   MessageBox MB_YESNO|MB_ICONQUESTION \
-    "Do you want to completely remove all ClawX user data?$\r$\n$\r$\nThis will delete:$\r$\n  • .openclaw folder (configuration & skills)$\r$\n  • AppData\Local\clawx (local app data)$\r$\n  • AppData\Roaming\clawx (roaming app data)$\r$\n$\r$\nSelect 'No' to keep your data for future reinstallation." \
+    "Do you want to completely remove all ClawX user data?$\r$\n$\r$\nThis will delete:$\r$\n  - .openclaw folder (configuration & skills)$\r$\n  - AppData\Local\ClawX-Data (providers, logs)$\r$\n  - AppData\Local\clawx-updater$\r$\n  - AppData\Local\clawx$\r$\n  - AppData\Roaming\clawx$\r$\n$\r$\nSelect 'No' to keep your data for future reinstallation." \
     /SD IDNO IDYES _cu_removeData IDNO _cu_skipRemove
 
   _cu_removeData:
     ; --- Always remove current user's data first ---
     RMDir /r "$PROFILE\.openclaw"
+    RMDir /r "$LOCALAPPDATA\ClawX-Data"
+    RMDir /r "$LOCALAPPDATA\clawx-updater"
     RMDir /r "$LOCALAPPDATA\clawx"
     RMDir /r "$APPDATA\clawx"
 
@@ -43,6 +45,8 @@
 
     ; Remove .openclaw and AppData for this user profile
     RMDir /r "$R2\.openclaw"
+    RMDir /r "$R2\AppData\Local\ClawX-Data"
+    RMDir /r "$R2\AppData\Local\clawx-updater"
     RMDir /r "$R2\AppData\Local\clawx"
     RMDir /r "$R2\AppData\Roaming\clawx"
 
