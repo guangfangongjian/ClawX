@@ -1003,6 +1003,29 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
           }
         }
 
+        // Sync openclaw.json if this is the default provider
+        try {
+          const defaultPid = await getDefaultProvider();
+          logger.info(`[provider:updateWithKey] sync check: defaultPid="${defaultPid}", providerId="${providerId}", match=${defaultPid === providerId}`);
+          if (defaultPid && defaultPid === providerId) {
+            const modelOverride = nextConfig.model
+              ? `${nextConfig.type}/${nextConfig.model}`
+              : undefined;
+            if (nextConfig.type === 'custom' || nextConfig.type === 'ollama') {
+              const envVar = getProviderEnvVar(nextConfig.type);
+              setOpenClawDefaultModelWithOverride(nextConfig.type, modelOverride, {
+                baseUrl: nextConfig.baseUrl,
+                api: 'openai-completions',
+                apiKeyEnv: envVar,
+              });
+            } else {
+              setOpenClawDefaultModel(nextConfig.type, modelOverride);
+            }
+          }
+        } catch (err) {
+          logger.warn('Failed to sync openclaw.json after provider:updateWithKey:', err);
+        }
+
         restartGatewayIfRunning('provider:updateWithKey');
         return { success: true };
       } catch (error) {
