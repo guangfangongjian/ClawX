@@ -1232,19 +1232,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Delete session: clear history and remove from list ──
 
   deleteSession: async (key: string) => {
-    // 1) Clear Gateway's in-memory session context via /new RPC
-    try {
-      await window.electron.ipcRenderer.invoke(
-        'gateway:rpc',
-        'chat.send',
-        { sessionKey: key, message: '/new', deliver: false },
-      );
-    } catch { /* ignore */ }
-
-    // 2) Delete on-disk session files (sessions.json entry + .jsonl history)
+    // 1) Delete on-disk session files (sessions.json entry + .jsonl history)
     try {
       await window.electron.ipcRenderer.invoke('session:delete', key);
     } catch { /* ignore - session may already be gone */ }
+
+    // 2) Restart Gateway to purge in-memory session state.
+    //    The /new RPC only resets the context window but keeps full message
+    //    history in memory, so the Gateway must be restarted for a true wipe.
+    try {
+      await window.electron.ipcRenderer.invoke('gateway:restart');
+    } catch { /* ignore */ }
 
     const { sessions, currentSessionKey } = get();
     const remaining = sessions.filter((s) => s.key !== key);
