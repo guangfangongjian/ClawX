@@ -1283,8 +1283,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const eventSessionKey = event.sessionKey ? String(event.sessionKey) : '';
     const { activeRunId, currentSessionKey, sending } = get();
 
-    // Skip events for a different session (e.g. Feishu group while viewing webchat)
-    if (eventSessionKey && eventSessionKey !== currentSessionKey) return;
+    // Auto-switch to externally triggered session (Feishu, Telegram, etc.)
+    // so the user sees thinking/streaming progress in real-time.
+    if (eventSessionKey && eventSessionKey !== currentSessionKey) {
+      if (!sending && runId && (eventState === 'delta' || (!eventState && event.message))) {
+        // New run starting on a different session — switch to it
+        const existingSessions = get().sessions;
+        const sessionExists = existingSessions.some(s => s.key === eventSessionKey);
+        set({
+          currentSessionKey: eventSessionKey,
+          sessions: sessionExists
+            ? existingSessions
+            : [...existingSessions, { key: eventSessionKey, displayName: eventSessionKey }],
+          messages: [],
+          streamingText: '',
+          streamingMessage: null,
+          streamingTools: [],
+          activeRunId: runId,
+          sending: true,
+          error: null,
+          pendingFinal: false,
+          lastUserMessageAt: null,
+          pendingToolImages: [],
+        });
+        // Reload sessions list & history for this session in background
+        void get().loadSessions();
+        void get().loadHistory();
+      } else {
+        // Not a new run start — skip events for non-current session
+        return;
+      }
+    }
 
     // Only process events for the active run (or if no active run set)
     if (activeRunId && runId && runId !== activeRunId) return;
