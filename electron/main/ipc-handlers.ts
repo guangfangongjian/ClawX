@@ -3,7 +3,7 @@
  * Registers all IPC handlers for main-renderer communication
  */
 import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage } from 'electron';
-import { existsSync, copyFileSync, statSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, copyFileSync, statSync, readFileSync, writeFileSync, mkdirSync, unlinkSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, extname, basename } from 'node:path';
 import crypto from 'node:crypto';
@@ -111,13 +111,15 @@ export function registerIpcHandlers(
  * Used for true session deletion since the Gateway lacks a sessions.delete RPC.
  */
 function registerSessionHandlers(): void {
+  logger.info('[session] Registering session:delete handler');
   ipcMain.handle('session:delete', async (_, sessionKey: string) => {
+    logger.info(`[session:delete] Called with key="${sessionKey}"`);
     try {
       const agentsDir = join(homedir(), '.openclaw', 'agents');
 
       // Scan all agents for the session key
       const agentIds = existsSync(agentsDir)
-        ? require('node:fs').readdirSync(agentsDir).filter((d: string) => {
+        ? readdirSync(agentsDir).filter((d: string) => {
             const p = join(agentsDir, d, 'sessions', 'sessions.json');
             return existsSync(p);
           })
