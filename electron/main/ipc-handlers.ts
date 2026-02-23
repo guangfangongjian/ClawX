@@ -3,7 +3,7 @@
  * Registers all IPC handlers for main-renderer communication
  */
 import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage } from 'electron';
-import { existsSync, copyFileSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, copyFileSync, statSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, extname, basename } from 'node:path';
 import crypto from 'node:crypto';
@@ -100,6 +100,60 @@ export function registerIpcHandlers(
 
   // Plugin install handlers
   registerPluginHandlers();
+
+  // Session management handlers (direct file access)
+  registerSessionHandlers();
+}
+
+/**
+ * Session management IPC handlers
+ * Direct read/write to ~/.openclaw/agents/*/sessions/ files.
+ * Used for true session deletion since the Gateway lacks a sessions.delete RPC.
+ */
+function registerSessionHandlers(): void {
+  ipcMain.handle('session:delete', async (_, sessionKey: string) => {
+    try {
+      const agentsDir = join(homedir(), '.openclaw', 'agents');
+
+      // Scan all agents for the session key
+      const agentIds = existsSync(agentsDir)
+        ? require('node:fs').readdirSync(agentsDir).filter((d: string) => {
+            const p = join(agentsDir, d, 'sessions', 'sessions.json');
+            return existsSync(p);
+          })
+        : [];
+
+      let deleted = false;
+      for (const agentId of agentIds) {
+        const sessionsFile = join(agentsDir, agentId, 'sessions', 'sessions.json');
+        try {
+          const raw = readFileSync(sessionsFile, 'utf-8');
+          const sessions = JSON.parse(raw) as Record<string, { sessionFile?: string }>;
+
+          if (sessionKey in sessions) {
+            // Delete the .jsonl history file if it exists
+            const historyFile = sessions[sessionKey]?.sessionFile;
+            if (historyFile && existsSync(historyFile)) {
+              try { unlinkSync(historyFile); } catch { /* ignore */ }
+            }
+
+            // Remove the session entry
+            delete sessions[sessionKey];
+            writeFileSync(sessionsFile, JSON.stringify(sessions, null, 2), 'utf-8');
+            deleted = true;
+            logger.info(`Deleted session "${sessionKey}" from agent "${agentId}"`);
+          }
+        } catch (err) {
+          logger.warn(`Failed to process sessions.json for agent "${agentId}":`, err);
+        }
+      }
+
+      return { success: true, deleted };
+    } catch (error) {
+      logger.error('session:delete failed:', error);
+      return { success: false, error: String(error) };
+    }
+  });
 }
 
 /**

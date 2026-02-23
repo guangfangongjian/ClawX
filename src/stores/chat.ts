@@ -1232,13 +1232,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   // ── Delete session: clear history and remove from list ──
 
   deleteSession: async (key: string) => {
-    // Try to clear the session history via Gateway RPC
+    // Truly delete the session: remove from Gateway's sessions.json + .jsonl history
     try {
-      await window.electron.ipcRenderer.invoke(
-        'gateway:rpc',
-        'chat.send',
-        { sessionKey: key, message: '/new', deliver: false },
-      );
+      await window.electron.ipcRenderer.invoke('session:delete', key);
     } catch { /* ignore - session may already be gone */ }
 
     const { sessions, currentSessionKey } = get();
