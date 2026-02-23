@@ -1270,10 +1270,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   handleChatEvent: (event: Record<string, unknown>) => {
     const runId = String(event.runId || '');
     const eventState = String(event.state || '');
-    const { activeRunId } = get();
+    const eventSessionKey = event.sessionKey ? String(event.sessionKey) : '';
+    const { activeRunId, currentSessionKey, sending } = get();
+
+    // Skip events for a different session (e.g. Feishu group while viewing webchat)
+    if (eventSessionKey && eventSessionKey !== currentSessionKey) return;
 
     // Only process events for the active run (or if no active run set)
     if (activeRunId && runId && runId !== activeRunId) return;
+
+    // Auto-activate sending state for externally triggered runs (Feishu, Telegram, etc.)
+    // so that streaming UI and stop button appear without manual refresh.
+    if (!sending && runId && (eventState === 'delta' || (!eventState && event.message))) {
+      set({ sending: true, activeRunId: runId });
+    }
 
     // Defensive: if state is missing but we have a message, try to infer state.
     // This handles the case where the Gateway sends events without a state wrapper
