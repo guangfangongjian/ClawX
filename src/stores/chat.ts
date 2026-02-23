@@ -1237,11 +1237,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await window.electron.ipcRenderer.invoke('session:delete', key);
     } catch { /* ignore - session may already be gone */ }
 
-    // 2) Restart Gateway to purge in-memory session state.
-    //    The /new RPC only resets the context window but keeps full message
-    //    history in memory, so the Gateway must be restarted for a true wipe.
+    // 2) Clear Gateway's in-memory session context via /new RPC.
+    //    With files already deleted, the Gateway won't reload old history.
     try {
-      await window.electron.ipcRenderer.invoke('gateway:restart');
+      await window.electron.ipcRenderer.invoke(
+        'gateway:rpc',
+        'chat.send',
+        { sessionKey: key, message: '/new', deliver: false },
+      );
     } catch { /* ignore */ }
 
     const { sessions, currentSessionKey } = get();

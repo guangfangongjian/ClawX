@@ -132,6 +132,8 @@ const electronAPI = {
         'openclaw:getSkillsDir',
         'openclaw:getCliCommand',
         'openclaw:installCliMac',
+        // Session management
+        'session:delete',
       ];
 
       if (validChannels.includes(channel)) {
