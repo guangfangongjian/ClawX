@@ -97,6 +97,8 @@ interface ChatState {
   loadHistory: (quiet?: boolean) => Promise<void>;
   sendMessage: (text: string, attachments?: Array<{ fileName: string; mimeType: string; fileSize: number; stagedPath: string; preview: string | null }>) => Promise<void>;
   abortRun: () => Promise<void>;
+  forceStop: () => Promise<void>;
+  deleteSession: (key: string) => Promise<void>;
   handleChatEvent: (event: Record<string, unknown>) => void;
   toggleThinking: () => void;
   refresh: () => Promise<void>;
@@ -1195,6 +1197,75 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
     } catch (err) {
       set({ error: String(err) });
+    }
+  },
+
+  // ── Force stop: abort + clear streaming + reload ──
+
+  forceStop: async () => {
+    const { currentSessionKey } = get();
+    // Immediately clear all streaming/sending state
+    set({
+      sending: false,
+      activeRunId: null,
+      streamingText: '',
+      streamingMessage: null,
+      streamingTools: [],
+      pendingFinal: false,
+      lastUserMessageAt: null,
+      pendingToolImages: [],
+      error: null,
+    });
+
+    try {
+      await window.electron.ipcRenderer.invoke(
+        'gateway:rpc',
+        'chat.abort',
+        { sessionKey: currentSessionKey },
+      );
+    } catch { /* ignore abort errors */ }
+
+    // Reload history to get clean state
+    await get().loadHistory();
+  },
+
+  // ── Delete session: clear history and remove from list ──
+
+  deleteSession: async (key: string) => {
+    // Try to clear the session history via Gateway RPC
+    try {
+      await window.electron.ipcRenderer.invoke(
+        'gateway:rpc',
+        'chat.send',
+        { sessionKey: key, message: '/new', deliver: false },
+      );
+    } catch { /* ignore - session may already be gone */ }
+
+    const { sessions, currentSessionKey } = get();
+    const remaining = sessions.filter((s) => s.key !== key);
+
+    if (key === currentSessionKey) {
+      // Deleted the active session — switch to first remaining or create new
+      const nextKey = remaining.length > 0
+        ? remaining[0].key
+        : DEFAULT_SESSION_KEY;
+      set({
+        sessions: remaining.length > 0 ? remaining : [{ key: nextKey, displayName: nextKey }],
+        currentSessionKey: nextKey,
+        messages: [],
+        streamingText: '',
+        streamingMessage: null,
+        streamingTools: [],
+        activeRunId: null,
+        sending: false,
+        error: null,
+        pendingFinal: false,
+        lastUserMessageAt: null,
+        pendingToolImages: [],
+      });
+      get().loadHistory();
+    } else {
+      set({ sessions: remaining });
     }
   },
 

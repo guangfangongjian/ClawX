@@ -1,9 +1,9 @@
 /**
  * Chat Toolbar
- * Session selector, new session, refresh, and thinking toggle.
+ * Session selector, new session, delete session, force stop, refresh, and thinking toggle.
  * Rendered in the Header when on the Chat page.
  */
-import { RefreshCw, Brain, ChevronDown, Plus } from 'lucide-react';
+import { RefreshCw, Brain, ChevronDown, Plus, Trash2, StopCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useChatStore } from '@/stores/chat';
@@ -15,6 +15,9 @@ export function ChatToolbar() {
   const currentSessionKey = useChatStore((s) => s.currentSessionKey);
   const switchSession = useChatStore((s) => s.switchSession);
   const newSession = useChatStore((s) => s.newSession);
+  const deleteSession = useChatStore((s) => s.deleteSession);
+  const forceStop = useChatStore((s) => s.forceStop);
+  const sending = useChatStore((s) => s.sending);
   const refresh = useChatStore((s) => s.refresh);
   const loading = useChatStore((s) => s.loading);
   const showThinking = useChatStore((s) => s.showThinking);
@@ -23,6 +26,12 @@ export function ChatToolbar() {
 
   const handleSessionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     switchSession(e.target.value);
+  };
+
+  const handleDeleteSession = () => {
+    if (window.confirm(t('toolbar.deleteSessionConfirm', '确定删除当前会话？历史记录将被清除。'))) {
+      deleteSession(currentSessionKey);
+    }
   };
 
   return (
@@ -69,6 +78,42 @@ export function ChatToolbar() {
           <p>{t('toolbar.newSession')}</p>
         </TooltipContent>
       </Tooltip>
+
+      {/* Delete Session */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+            onClick={handleDeleteSession}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{t('toolbar.deleteSession', '删除会话')}</p>
+        </TooltipContent>
+      </Tooltip>
+
+      {/* Force Stop */}
+      {sending && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:bg-destructive/10"
+              onClick={forceStop}
+            >
+              <StopCircle className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{t('toolbar.forceStop', '强制停止')}</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       {/* Refresh */}
       <Tooltip>
