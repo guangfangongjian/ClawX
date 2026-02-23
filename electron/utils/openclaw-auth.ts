@@ -467,6 +467,17 @@ export function ensureTokenOptimization(): void {
     changed = true;
   }
 
+  // Migrate: ensure custom provider has apiKeyEnv so Gateway can inject the key.
+  // Older configs written before the CUSTOM_API_KEY fix are missing this field.
+  const models = (config.models || {}) as Record<string, unknown>;
+  const providers = (models.providers || {}) as Record<string, Record<string, unknown>>;
+  if (providers.custom && !providers.custom.apiKeyEnv) {
+    providers.custom.apiKeyEnv = 'CUSTOM_API_KEY';
+    models.providers = providers;
+    config.models = models;
+    changed = true;
+  }
+
   if (changed) {
     agents.defaults = defaults;
     config.agents = agents;
