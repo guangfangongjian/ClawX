@@ -895,6 +895,7 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
       // so that changes to baseUrl/model take effect without re-clicking "set default".
       try {
         const defaultProviderId = await getDefaultProvider();
+        logger.info(`[provider:save] sync check: defaultProviderId="${defaultProviderId}", config.id="${config.id}", match=${defaultProviderId === config.id}`);
         if (defaultProviderId && defaultProviderId === config.id) {
           const modelOverride = config.model
             ? `${config.type}/${config.model}`
