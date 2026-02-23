@@ -7,6 +7,19 @@ import { join } from 'path';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, readdirSync, statSync } from 'fs';
 
 /**
+ * Format Date as local ISO string (e.g. 2026-02-23T20:04:13.087+08:00)
+ */
+function toLocalISO(d: Date): string {
+  const off = d.getTimezoneOffset();
+  const sign = off <= 0 ? '+' : '-';
+  const absOff = Math.abs(off);
+  const hh = String(Math.floor(absOff / 60)).padStart(2, '0');
+  const mm = String(absOff % 60).padStart(2, '0');
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}${sign}${hh}:${mm}`;
+}
+
+/**
  * Log levels
  */
 export enum LogLevel {
@@ -44,11 +57,12 @@ export function initLogger(): void {
       mkdirSync(logDir, { recursive: true });
     }
 
-    const timestamp = new Date().toISOString().split('T')[0];
-    logFilePath = join(logDir, `clawx-${timestamp}.log`);
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    logFilePath = join(logDir, `clawx-${dateStr}.log`);
 
     // Write a separator for new session
-    const sessionHeader = `\n${'='.repeat(80)}\n[${new Date().toISOString()}] === ClawX Session Start (v${app.getVersion()}) ===\n${'='.repeat(80)}\n`;
+    const sessionHeader = `\n${'='.repeat(80)}\n[${toLocalISO(now)}] === ClawX Session Start (v${app.getVersion()}) ===\n${'='.repeat(80)}\n`;
     appendFileSync(logFilePath, sessionHeader);
   } catch (error) {
     console.error('Failed to initialize logger:', error);
@@ -80,7 +94,7 @@ export function getLogFilePath(): string | null {
  * Format log message
  */
 function formatMessage(level: string, message: string, ...args: unknown[]): string {
-  const timestamp = new Date().toISOString();
+  const timestamp = toLocalISO(new Date());
   const formattedArgs = args.length > 0 ? ' ' + args.map(arg => {
     if (arg instanceof Error) {
       return `${arg.message}\n${arg.stack || ''}`;
