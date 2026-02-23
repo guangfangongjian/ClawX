@@ -57,12 +57,12 @@ export function createTray(mainWindow: BrowserWindow): Tray {
   tray = new Tray(icon);
   
   // Set tooltip
-  tray.setToolTip('ClawX - AI Assistant');
+  tray.setToolTip('ClawX - AI 助手');
   
   // Create context menu
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Show ClawX',
+      label: '显示 ClawX',
       click: () => {
         mainWindow.show();
         mainWindow.focus();
@@ -72,11 +72,11 @@ export function createTray(mainWindow: BrowserWindow): Tray {
       type: 'separator',
     },
     {
-      label: 'Gateway Status',
+      label: '网关状态',
       enabled: false,
     },
     {
-      label: '  Running',
+      label: '  运行中',
       type: 'checkbox',
       checked: true,
       enabled: false,
@@ -85,24 +85,24 @@ export function createTray(mainWindow: BrowserWindow): Tray {
       type: 'separator',
     },
     {
-      label: 'Quick Actions',
+      label: '快捷操作',
       submenu: [
         {
-          label: 'Open Dashboard',
+          label: '打开仪表盘',
           click: () => {
             mainWindow.show();
             mainWindow.webContents.send('navigate', '/');
           },
         },
         {
-          label: 'Open Chat',
+          label: '打开聊天',
           click: () => {
             mainWindow.show();
             mainWindow.webContents.send('navigate', '/chat');
           },
         },
         {
-          label: 'Open Settings',
+          label: '打开设置',
           click: () => {
             mainWindow.show();
             mainWindow.webContents.send('navigate', '/settings');
@@ -114,7 +114,7 @@ export function createTray(mainWindow: BrowserWindow): Tray {
       type: 'separator',
     },
     {
-      label: 'Check for Updates...',
+      label: '检查更新...',
       click: () => {
         mainWindow.webContents.send('update:check');
       },
@@ -123,7 +123,7 @@ export function createTray(mainWindow: BrowserWindow): Tray {
       type: 'separator',
     },
     {
-      label: 'Quit ClawX',
+      label: '退出 ClawX',
       click: () => {
         app.quit();
       },
