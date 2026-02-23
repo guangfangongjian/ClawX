@@ -467,15 +467,26 @@ export function ensureTokenOptimization(): void {
     changed = true;
   }
 
-  // Migrate: ensure custom provider has apiKeyEnv so Gateway can inject the key.
-  // Older configs written before the CUSTOM_API_KEY fix are missing this field.
+  // Migrate: ensure custom provider has apiKey referencing the CUSTOM_API_KEY env var.
+  // Older configs may be missing this field, or may have an invalid 'apiKeyEnv' key
+  // (which the Gateway rejects as unrecognized).
   const models = (config.models || {}) as Record<string, unknown>;
   const providers = (models.providers || {}) as Record<string, Record<string, unknown>>;
-  if (providers.custom && !providers.custom.apiKeyEnv) {
-    providers.custom.apiKeyEnv = 'CUSTOM_API_KEY';
-    models.providers = providers;
-    config.models = models;
-    changed = true;
+  if (providers.custom) {
+    // Remove invalid apiKeyEnv if present (was incorrectly written by earlier builds)
+    if ('apiKeyEnv' in providers.custom) {
+      delete providers.custom.apiKeyEnv;
+      changed = true;
+    }
+    // Ensure apiKey uses env-var reference so Gateway can authenticate
+    if (!providers.custom.apiKey) {
+      providers.custom.apiKey = '${CUSTOM_API_KEY}';
+      changed = true;
+    }
+    if (changed) {
+      models.providers = providers;
+      config.models = models;
+    }
   }
 
   if (changed) {
