@@ -106,8 +106,8 @@ export function registerIpcHandlers(
 }
 
 /**
- * Session management IPC handlers
- * Direct read/write to ~/.openclaw/agents/*/sessions/ files.
+ * Session management IPC handlers.
+ * Direct read/write to agent session files on disk.
  * Used for true session deletion since the Gateway lacks a sessions.delete RPC.
  */
 function registerSessionHandlers(): void {
