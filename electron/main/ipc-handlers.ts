@@ -1503,8 +1503,13 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
     const { spawn } = require('child_process');
     const { homedir } = require('os');
 
-    // Strip ANSI escape codes for clean progress messages
-    const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, '').trim();
+    // Strip ANSI escape codes (colors, cursor movement, clear screen, etc.) and spinner unicode
+    const stripAnsi = (str: string) => str
+      .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')  // CSI sequences (colors, cursor, clear)
+      .replace(/\x1b\][^\x07]*\x07/g, '')      // OSC sequences
+      .replace(/[\u25D0-\u25D3\u280A-\u28FF]/g, '')  // spinner/braille chars
+      .replace(/\r/g, '')
+      .trim();
 
     return new Promise((resolve) => {
       const args = params.command.split(/\s+/).filter(Boolean);
