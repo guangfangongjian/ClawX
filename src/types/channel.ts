@@ -466,6 +466,26 @@ export const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
         required: true,
         description: 'channels:meta.hi-light.fields.authToken.description',
       },
+      {
+        key: 'dmPolicy',
+        label: 'channels:meta.hi-light.fields.dmPolicy.label',
+        type: 'select',
+        required: false,
+        description: 'channels:meta.hi-light.fields.dmPolicy.description',
+        options: [
+          { value: 'open', label: 'channels:meta.hi-light.fields.dmPolicy.options.open' },
+          { value: 'pairing', label: 'channels:meta.hi-light.fields.dmPolicy.options.pairing' },
+          { value: 'allowlist', label: 'channels:meta.hi-light.fields.dmPolicy.options.allowlist' },
+        ],
+      },
+      {
+        key: 'allowFrom',
+        label: 'channels:meta.hi-light.fields.allowFrom.label',
+        type: 'text',
+        placeholder: 'channels:meta.hi-light.fields.allowFrom.placeholder',
+        required: false,
+        description: 'channels:meta.hi-light.fields.allowFrom.description',
+      },
     ],
     instructions: [
       'channels:meta.hi-light.instructions.0',

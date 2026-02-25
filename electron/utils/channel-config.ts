@@ -172,6 +172,29 @@ export function saveChannelConfig(
         }
     }
 
+    // Special handling for HiLight: convert allowFrom string to array, set dmPolicy defaults
+    if (channelType === 'hi-light') {
+        const { allowFrom, ...restHlConfig } = transformedConfig;
+        transformedConfig = { ...restHlConfig };
+
+        if (allowFrom && typeof allowFrom === 'string') {
+            const users = (allowFrom as string).split(',')
+                .map(u => u.trim())
+                .filter(u => u.length > 0);
+            transformedConfig.allowFrom = users.length > 0 ? users : ['*'];
+        } else if (!allowFrom) {
+            // Default to ['*'] if not set
+            const existingConfig = currentConfig.channels?.[channelType] || {};
+            transformedConfig.allowFrom = existingConfig.allowFrom ?? ['*'];
+        }
+
+        // Default dmPolicy to 'open'
+        if (!transformedConfig.dmPolicy) {
+            const existingConfig = currentConfig.channels?.[channelType] || {};
+            transformedConfig.dmPolicy = existingConfig.dmPolicy ?? 'open';
+        }
+    }
+
     // Special handling for Feishu: default to open DM policy with wildcard allowlist
     if (channelType === 'feishu') {
         const existingConfig = currentConfig.channels[channelType] || {};
@@ -263,6 +286,15 @@ export function getChannelFormValues(channelType: string): Record<string, string
         // Also extract other string values
         for (const [key, value] of Object.entries(saved)) {
             if (typeof value === 'string' && key !== 'enabled') {
+                values[key] = value;
+            }
+        }
+    } else if (channelType === 'hi-light') {
+        // Special handling for HiLight: convert allowFrom array to string
+        for (const [key, value] of Object.entries(saved)) {
+            if (key === 'allowFrom' && Array.isArray(value)) {
+                values[key] = value.join(', ');
+            } else if (typeof value === 'string' && key !== 'enabled') {
                 values[key] = value;
             }
         }

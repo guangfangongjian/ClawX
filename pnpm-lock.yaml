@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@art_style666/hi-light':
-        specifier: ^1.0.1
-        version: 1.0.1
+        specifier: ^2.0.1
+        version: 2.0.1
       electron-store:
         specifier: ^11.0.2
         version: 11.0.2
@@ -231,8 +231,8 @@ packages:
   '@ark/util@0.56.0':
     resolution: {integrity: sha512-BghfRC8b9pNs3vBoDJhcta0/c1J1rsoS1+HgVUreMFPdhz/CRAKReAu57YEllNaSy98rWAdY1gE+gFup7OXpgA==}
 
-  '@art_style666/hi-light@1.0.1':
-    resolution: {integrity: sha512-yUFdm1hHRFTnICgYDNZhHY2plT7fqaa9zwvoRjLkCKz1AfD/8XkANU7qRsdpMk4dFAg9/YBTweWI3H4IoL2+JQ==}
+  '@art_style666/hi-light@2.0.1':
+    resolution: {integrity: sha512-9/837RDj9Uw9dOBZGk+sAt3uTH/u60mJ+KPlzlAhFdW9O3d1feNBH3NiKFNiNE/q0CIj47KitpaHYSK/UgYZ+g==}
 
   '@asamuzakjp/css-color@4.1.2':
     resolution: {integrity: sha512-NfBUvBaYgKIuq6E/RBLY1m0IohzNHAYyaJGuTK79Z23uNwmz2jl1mPsC5ZxCCxylinKhT1Amn5oNTlx1wN8cQg==}
@@ -6939,7 +6939,7 @@ snapshots:
 
   '@ark/util@0.56.0': {}
 
-  '@art_style666/hi-light@1.0.1':
+  '@art_style666/hi-light@2.0.1':
     dependencies:
       ws: 8.19.0
       zod: 3.25.76

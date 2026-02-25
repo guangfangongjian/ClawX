@@ -279,6 +279,20 @@
                     "label": "Auth Token (API Key)",
                     "placeholder": "Your HiLight API Key",
                     "description": "Token sent in the Authorization header during WebSocket handshake."
+                },
+                "dmPolicy": {
+                    "label": "消息策略",
+                    "description": "控制谁可以向机器人发送消息",
+                    "options": {
+                        "open": "开放 - 所有人可发送",
+                        "pairing": "配对 - 需要配对后才能发送",
+                        "allowlist": "白名单 - 仅白名单用户可发送"
+                    }
+                },
+                "allowFrom": {
+                    "label": "允许的用户",
+                    "placeholder": "* 或用逗号分隔的用户ID",
+                    "description": "允许发送消息的用户ID列表，* 表示所有人。仅在消息策略为【白名单】时生效。"
                 }
             },
             "instructions": [
