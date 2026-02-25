@@ -383,6 +383,10 @@ export class GatewayManager extends EventEmitter {
   async restart(): Promise<void> {
     logger.debug('Gateway restart requested');
     await this.stop();
+    // After stop(), the previous start() flow may still be unwinding its
+    // try/catch/finally (which resets startLock). Yield to the event loop
+    // so the finally block can execute before we attempt a new start().
+    await new Promise(resolve => setTimeout(resolve, 50));
     await this.start();
   }
   
@@ -764,6 +768,10 @@ export class GatewayManager extends EventEmitter {
   private async waitForReady(retries = 2400, interval = 250): Promise<void> {
     const child = this.process;
     for (let i = 0; i < retries; i++) {
+      // Early exit if start was aborted (e.g. by stop/restart)
+      if (this.startAbort?.signal.aborted) {
+        throw new Error('Gateway start aborted');
+      }
       // Early exit if the gateway process has already exited
       if (child && (child.exitCode !== null || child.signalCode !== null)) {
         const code = child.exitCode;
