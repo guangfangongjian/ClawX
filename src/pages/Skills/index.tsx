@@ -777,8 +777,10 @@ export function Skills() {
   }, [installSkill, enableSkill, t]);
 
   // Initial marketplace load (Discovery) - use HTTP API for full list
+  // Reset discovery flag when leaving marketplace tab so it retries on re-entry
   useEffect(() => {
     if (activeTab !== 'marketplace') {
+      marketplaceDiscoveryAttemptedRef.current = false;
       return;
     }
     if (marketplaceQuery.trim()) {
@@ -787,12 +789,12 @@ export function Skills() {
     if (searching) {
       return;
     }
-    if (marketplaceDiscoveryAttemptedRef.current) {
+    if (marketplaceDiscoveryAttemptedRef.current && searchResults.length > 0) {
       return;
     }
     marketplaceDiscoveryAttemptedRef.current = true;
     exploreSkills();
-  }, [activeTab, marketplaceQuery, searching, exploreSkills]);
+  }, [activeTab, marketplaceQuery, searching, exploreSkills, searchResults.length]);
 
   // Handle uninstall
   const handleUninstall = useCallback(async (slug: string) => {

@@ -328,7 +328,7 @@ export class ClawHubService {
             return { items, nextCursor: data.nextCursor };
         } catch (error) {
             console.error('[exploreApi] error:', error);
-            return { items: [], nextCursor: null };
+            throw error;
         }
     }
 
