@@ -449,10 +449,14 @@ export const CHANNEL_META: Record<ChannelType, ChannelMeta> = {
       {
         key: 'wsUrl',
         label: 'channels:meta.hi-light.fields.wsUrl.label',
-        type: 'text',
+        type: 'select',
         placeholder: 'channels:meta.hi-light.fields.wsUrl.placeholder',
         required: true,
         description: 'channels:meta.hi-light.fields.wsUrl.description',
+        options: [
+          { value: 'wss://open.guangfan.com/open-apis/device-agent/v1/websocket', label: 'channels:meta.hi-light.fields.wsUrl.presetLabel' },
+          { value: '__custom__', label: 'channels:meta.hi-light.fields.wsUrl.customLabel' },
+        ],
       },
       {
         key: 'authToken',

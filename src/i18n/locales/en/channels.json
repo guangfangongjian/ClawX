@@ -270,7 +270,10 @@
                 "wsUrl": {
                     "label": "WebSocket URL",
                     "placeholder": "wss://open.guangfan.com/open-apis/device-agent/v1/websocket",
-                    "description": "Base WebSocket URL. The plugin appends a UUID path segment on every connection."
+                    "description": "Base WebSocket URL. The plugin appends a UUID path segment on every connection.",
+                    "presetLabel": "官方",
+                    "customLabel": "自定义",
+                    "customPlaceholder": "wss://your-server.com/path"
                 },
                 "authToken": {
                     "label": "Auth Token (API Key)",

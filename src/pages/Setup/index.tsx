@@ -1295,34 +1295,69 @@ function SetupChannelContent() {
       {/* Config fields */}
       {meta?.configFields.map((field: ChannelConfigField) => {
         const isPassword = field.type === 'password';
+        const isSelect = field.type === 'select' && field.options;
+        const currentVal = configValues[field.key] || '';
+        const isCustom = isSelect && currentVal !== '' && !field.options?.some(o => o.value !== '__custom__' && o.value === currentVal);
         return (
           <div key={field.key} className="space-y-1.5">
             <Label htmlFor={`setup-${field.key}`} className="text-foreground">
               {t(field.label)}
               {field.required && <span className="text-red-400 ml-1">*</span>}
             </Label>
-            <div className="flex gap-2">
-              <Input
-                id={`setup-${field.key}`}
-                type={isPassword && !showSecrets[field.key] ? 'password' : 'text'}
-                placeholder={field.placeholder ? t(field.placeholder) : undefined}
-                value={configValues[field.key] || ''}
-                onChange={(e) => setConfigValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                autoComplete="off"
-                className="font-mono text-sm bg-background border-input"
-              />
-              {isPassword && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="shrink-0"
-                  onClick={() => setShowSecrets((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+            {isSelect ? (
+              <div className="space-y-2">
+                <select
+                  id={`setup-${field.key}`}
+                  value={isCustom ? '__custom__' : (currentVal || field.options![0]?.value || '')}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '__custom__') {
+                      setConfigValues((prev) => ({ ...prev, [field.key]: '' }));
+                    } else {
+                      setConfigValues((prev) => ({ ...prev, [field.key]: v }));
+                    }
+                  }}
+                  className="w-full h-10 px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 >
-                  {showSecrets[field.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </Button>
-              )}
-            </div>
+                  {field.options!.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{t(opt.label)}</option>
+                  ))}
+                </select>
+                {isCustom && (
+                  <Input
+                    type="text"
+                    placeholder="wss://your-server.com/path"
+                    value={currentVal}
+                    onChange={(e) => setConfigValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                    autoComplete="off"
+                    className="font-mono text-sm bg-background border-input"
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  id={`setup-${field.key}`}
+                  type={isPassword && !showSecrets[field.key] ? 'password' : 'text'}
+                  placeholder={field.placeholder ? t(field.placeholder) : undefined}
+                  value={currentVal}
+                  onChange={(e) => setConfigValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  autoComplete="off"
+                  className="font-mono text-sm bg-background border-input"
+                />
+                {isPassword && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => setShowSecrets((prev) => ({ ...prev, [field.key]: !prev[field.key] }))}
+                  >
+                    {showSecrets[field.key] ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                )}
+              </div>
+            )}
             {field.description && (
               <p className="text-xs text-slate-500 mt-1">{t(field.description)}</p>
             )}
