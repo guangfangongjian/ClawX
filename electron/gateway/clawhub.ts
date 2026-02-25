@@ -138,53 +138,113 @@ export class ClawHubService {
     }
 
     /**
-     * Search for skills
+     * Search for skills via HTTP API, with CLI fallback.
      */
     async search(params: ClawHubSearchParams): Promise<ClawHubSkillResult[]> {
+        // If query is empty, use 'explore' to show all available skills
+        if (!params.query || params.query.trim() === '') {
+            const result = await this.exploreApi({ limit: params.limit || 200 });
+            return result.items;
+        }
+
+        // 1. Try HTTP API search first
         try {
-            // If query is empty, use 'explore' to show all available skills
-            if (!params.query || params.query.trim() === '') {
-                return this.explore({ limit: params.limit || 500 });
-            }
-
-            const args = ['search', params.query];
-            if (params.limit) {
-                args.push('--limit', String(params.limit));
-            }
-
-            const output = await this.runCommand(args);
-            if (!output || output.includes('No skills found')) {
-                return [];
-            }
-
-            const lines = output.split('\n').filter(l => l.trim());
-            return lines.map(line => {
-                const cleanLine = this.stripAnsi(line);
-
-                // Format could be: slug vversion description (score)
-                // Or sometimes: slug  vversion  description
-                const match = cleanLine.match(/^(\S+)\s+v?(\d+\.\S+)\s+(.+)$/);
-                if (match) {
-                    const slug = match[1];
-                    const version = match[2];
-                    let description = match[3];
-
-                    // Clean up score if present at the end
-                    description = description.replace(/\(\d+\.\d+\)$/, '').trim();
-
-                    return {
-                        slug,
-                        name: slug,
-                        version,
-                        description,
-                    };
-                }
-                return null;
-            }).filter((s): s is ClawHubSkillResult => s !== null);
+            const results = await this.searchApi(params.query, params.limit);
+            if (results.length > 0) return results;
         } catch (error) {
-            console.error('ClawHub search error:', error);
+            console.warn('ClawHub HTTP search failed, trying CLI fallback:', error);
+        }
+
+        // 2. Fallback: CLI search
+        try {
+            const results = await this.searchCli(params);
+            if (results.length > 0) return results;
+        } catch (error) {
+            console.warn('ClawHub CLI search failed:', error);
+        }
+
+        return [];
+    }
+
+    /**
+     * Search skills via HTTP API (clawhub.ai)
+     */
+    private async searchApi(query: string, limit?: number): Promise<ClawHubSkillResult[]> {
+        const registry = 'https://clawhub.ai';
+        const url = new URL('/api/v1/skills', registry);
+        url.searchParams.set('q', query);
+        url.searchParams.set('limit', String(limit || 50));
+
+        console.log('[searchApi] Fetching:', url.toString());
+        const res = await fetch(url.toString());
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        const data = await res.json() as {
+            items: Array<{
+                slug: string;
+                displayName: string;
+                summary?: string | null;
+                latestVersion?: { version: string } | null;
+            }>;
+        };
+
+        const mapped = (data.items || []).map(item => ({
+            slug: item.slug,
+            name: item.displayName || item.slug,
+            description: item.summary || '',
+            version: item.latestVersion?.version || '0.0.0',
+        }));
+
+        // Client-side filter in case the API ignores the q parameter
+        const q = query.toLowerCase();
+        const filtered = mapped.filter(s =>
+            s.slug.toLowerCase().includes(q) ||
+            s.name.toLowerCase().includes(q) ||
+            s.description.toLowerCase().includes(q)
+        );
+        console.log('[searchApi] total:', mapped.length, 'filtered:', filtered.length);
+        return filtered;
+    }
+
+    /**
+     * Search skills via CLI (original method)
+     */
+    private async searchCli(params: ClawHubSearchParams): Promise<ClawHubSkillResult[]> {
+        const args = ['search', params.query];
+        if (params.limit) {
+            args.push('--limit', String(params.limit));
+        }
+
+        const output = await this.runCommand(args);
+        if (!output || output.includes('No skills found')) {
             return [];
         }
+
+        const lines = output.split('\n').filter(l => l.trim());
+        return lines.map(line => {
+            const cleanLine = this.stripAnsi(line);
+
+            // Format could be: slug vversion description (score)
+            // Or sometimes: slug  vversion  description
+            const match = cleanLine.match(/^(\S+)\s+v?(\d+\.\S+)\s+(.+)$/);
+            if (match) {
+                const slug = match[1];
+                const version = match[2];
+                let description = match[3];
+
+                // Clean up score if present at the end
+                description = description.replace(/\(\d+\.\d+\)$/, '').trim();
+
+                return {
+                    slug,
+                    name: slug,
+                    version,
+                    description,
+                };
+            }
+            return null;
+        }).filter((s): s is ClawHubSkillResult => s !== null);
     }
 
     /**
