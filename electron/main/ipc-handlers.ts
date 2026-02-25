@@ -1505,9 +1505,10 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
 
     // Strip ANSI escape codes (colors, cursor movement, clear screen, etc.) and spinner unicode
     const stripAnsi = (str: string) => str
-      .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')  // CSI sequences (colors, cursor, clear)
-      .replace(/\x1b\][^\x07]*\x07/g, '')      // OSC sequences
-      .replace(/[\u25D0-\u25D3\u280A-\u28FF]/g, '')  // spinner/braille chars
+      .replace(/\x1b\[[?]?[0-9;]*[A-Za-z]/g, '')   // CSI sequences including ?25h cursor show/hide
+      .replace(/\x1b\][^\x07]*\x07/g, '')            // OSC sequences
+      .replace(/\x1b[()][A-Z0-9]/g, '')              // Character set sequences
+      .replace(/[\u25A0-\u25FF\u2580-\u259F\u2800-\u28FF\u2500-\u257F]/g, '')  // box/block/braille/spinner chars
       .replace(/\r/g, '')
       .trim();
 
