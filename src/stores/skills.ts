@@ -240,8 +240,20 @@ export const useSkillsStore = create<SkillsState>((set, get) => ({
       if (!result.success) {
         throw new Error(result.error || 'Uninstall failed');
       }
-      // Refresh skills after uninstall
-      await get().fetchSkills();
+      // Disable on Gateway so it doesn't keep the skill loaded in memory
+      try {
+        await window.electron.ipcRenderer.invoke(
+          'gateway:rpc',
+          'skills.update',
+          { skillKey: slug, enabled: false }
+        );
+      } catch { /* Gateway may not have this skill, ignore */ }
+      // Immediately remove from local state so UI updates right away.
+      // Don't call fetchSkills() here — Gateway still reports the skill
+      // in memory until restart, which would re-add it to the list.
+      set((state) => ({
+        skills: state.skills.filter(s => s.id !== slug && s.slug !== slug),
+      }));
     } catch (error) {
       console.error('Uninstall error:', error);
       throw error;
