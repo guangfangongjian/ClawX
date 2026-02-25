@@ -178,9 +178,19 @@ export class ClawHubService {
         }
 
         console.log('[searchApi] Fetching:', url.toString());
-        const res = await fetch(url.toString());
-        if (!res.ok) {
-            throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        let res: Response | undefined;
+        for (let attempt = 0; attempt <= 2; attempt++) {
+            res = await fetch(url.toString());
+            if (res.status === 429 && attempt < 2) {
+                const delay = (attempt + 1) * 2000;
+                console.warn(`[searchApi] Rate limited, retrying in ${delay}ms`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            break;
+        }
+        if (!res || !res.ok) {
+            throw new Error(`HTTP ${res?.status}: ${res?.statusText}`);
         }
         const data = await res.json() as {
             results: Array<{
@@ -326,7 +336,7 @@ export class ClawHubService {
     }
 
     /**
-     * Install a skill
+     * Install a skill (with retry on rate limit)
      */
     async install(params: ClawHubInstallParams): Promise<void> {
         const args = ['install', params.slug];
@@ -339,8 +349,23 @@ export class ClawHubService {
             args.push('--force');
         }
 
-        const output = await this.runCommand(args);
-        console.log(`ClawHub install output for ${params.slug}:`, output);
+        const maxRetries = 3;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const output = await this.runCommand(args);
+                console.log(`ClawHub install output for ${params.slug}:`, output);
+                break;
+            } catch (error) {
+                const errMsg = String(error);
+                if (errMsg.includes('Rate limit') && attempt < maxRetries) {
+                    const delay = (attempt + 1) * 3000;
+                    console.warn(`[install] Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    continue;
+                }
+                throw error;
+            }
+        }
 
         // Verify the skill directory was actually created
         const skillDir = path.join(this.workDir, 'skills', params.slug);
