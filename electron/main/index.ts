@@ -15,6 +15,7 @@ import { logger } from '../utils/logger';
 import { warmupNetworkOptimization } from '../utils/uv-env';
 
 import { ClawHubService } from '../gateway/clawhub';
+import { ensureClawXContext } from '../utils/openclaw-workspace';
 
 // For packaged app, redirect userData to %LOCALAPPDATA%/ClawX-Data
 // instead of %APPDATA%/ClawX to avoid non-ASCII path issues.
@@ -200,9 +201,9 @@ async function initialize(): Promise<void> {
   // Note: Auto-check for updates is driven by the renderer (update store init)
   // so it respects the user's "Auto-check for updates" setting.
 
-  // Windows: minimize to tray on close instead of quitting
+  // Minimize to tray on close instead of quitting (macOS & Windows)
   mainWindow.on('close', (event) => {
-    if (process.platform === 'win32' && !isQuitting) {
+    if (!isQuitting) {
       event.preventDefault();
       mainWindow?.hide();
     }
@@ -211,6 +212,13 @@ async function initialize(): Promise<void> {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Merge ClawX context snippets into the openclaw workspace bootstrap files
+  try {
+    ensureClawXContext();
+  } catch (error) {
+    logger.warn('Failed to merge ClawX context into workspace:', error);
+  }
 
   // Start Gateway automatically
   try {

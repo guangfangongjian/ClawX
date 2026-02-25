@@ -1,7 +1,7 @@
 appId: app.clawx.desktop
 productName: ClawX
 copyright: Copyright © 2026 ClawX
-compression: normal
+compression: maximum
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 
 directories:
@@ -21,6 +21,7 @@ extraResources:
       - "!icons/*.md"
       - "!icons/*.svg"
       - "!bin/**"
+      - "!screenshot/**"
   # OpenClaw package (node_modules copied separately by afterPack hook
   # because electron-builder respects .gitignore which excludes node_modules/)
   - from: build/openclaw/
@@ -34,6 +35,13 @@ afterPack: ./scripts/after-pack.cjs
 asar: true
 asarUnpack:
   - "**/*.node"
+
+# Disable native module rebuilding.
+# The Electron renderer/main process has no native (.node) dependencies.
+# All native modules (opus, sharp, koffi …) belong to openclaw, which is
+# bundled separately (bundle-openclaw.mjs → extraResources) and runs in its
+# own process — @electron/rebuild must NOT touch them.
+npmRebuild: false
 
 # Auto-update configuration
 # Primary: GitHub Releases from organization repo
