@@ -3,7 +3,7 @@
  * Writes API keys to ~/.openclaw/agents/main/agent/auth-profiles.json
  * so the OpenClaw Gateway can load them for AI provider calls.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import {
@@ -102,43 +102,73 @@ function writeAuthProfiles(store: AuthProfilesStore, agentId = 'main'): void {
 }
 
 /**
+ * Discover all agent IDs that have an agent/ subdirectory.
+ */
+function discoverAgentIds(): string[] {
+  const agentsDir = join(homedir(), '.openclaw', 'agents');
+  try {
+    if (!existsSync(agentsDir)) return ['main'];
+    return readdirSync(agentsDir, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && existsSync(join(agentsDir, d.name, 'agent')))
+      .map((d) => d.name);
+  } catch {
+    return ['main'];
+  }
+}
+
+/**
  * Save a provider API key to OpenClaw's auth-profiles.json
  * This writes the key in the format OpenClaw expects so the gateway
  * can use it for AI provider calls.
+ *
+ * Writes to ALL discovered agent directories so every agent
+ * (including non-"main" agents like "dev") stays in sync.
  * 
  * @param provider - Provider type (e.g., 'anthropic', 'openrouter', 'openai', 'google')
  * @param apiKey - The API key to store
- * @param agentId - Agent ID (defaults to 'main')
+ * @param agentId - Optional single agent ID. When omitted, writes to every agent.
  */
 export function saveProviderKeyToOpenClaw(
   provider: string,
   apiKey: string,
   agentId?: string
 ): void {
-  const targets = agentId ? [agentId] : getAllAgentIds();
+  const agentIds = agentId ? [agentId] : discoverAgentIds();
+  if (agentIds.length === 0) agentIds.push('main');
 
-  for (const id of targets) {
+  for (const id of agentIds) {
     const store = readAuthProfiles(id);
+
+    // Profile ID follows OpenClaw convention: <provider>:default
     const profileId = `${provider}:default`;
 
+    // Upsert the profile entry
     store.profiles[profileId] = {
       type: 'api_key',
       provider,
       key: apiKey,
     };
 
-    if (!store.order) store.order = {};
-    if (!store.order[provider]) store.order[provider] = [];
+    // Update order to include this profile
+    if (!store.order) {
+      store.order = {};
+    }
+    if (!store.order[provider]) {
+      store.order[provider] = [];
+    }
     if (!store.order[provider].includes(profileId)) {
       store.order[provider].push(profileId);
     }
 
-    if (!store.lastGood) store.lastGood = {};
+    // Set as last good
+    if (!store.lastGood) {
+      store.lastGood = {};
+    }
     store.lastGood[provider] = profileId;
 
     writeAuthProfiles(store, id);
-    console.log(`Saved API key for provider "${provider}" to OpenClaw auth-profiles (agent: ${id})`);
   }
+  console.log(`Saved API key for provider "${provider}" to OpenClaw auth-profiles (agents: ${agentIds.join(', ')})`);
 }
 
 /**
@@ -148,16 +178,17 @@ export function removeProviderKeyFromOpenClaw(
   provider: string,
   agentId?: string
 ): void {
-  const targets = agentId ? [agentId] : getAllAgentIds();
+  const agentIds = agentId ? [agentId] : discoverAgentIds();
+  if (agentIds.length === 0) agentIds.push('main');
 
-  for (const id of targets) {
+  for (const id of agentIds) {
     const store = readAuthProfiles(id);
     const profileId = `${provider}:default`;
 
     delete store.profiles[profileId];
 
     if (store.order?.[provider]) {
-      store.order[provider] = store.order[provider].filter((pid) => pid !== profileId);
+      store.order[provider] = store.order[provider].filter((aid) => aid !== profileId);
       if (store.order[provider].length === 0) {
         delete store.order[provider];
       }
@@ -168,8 +199,8 @@ export function removeProviderKeyFromOpenClaw(
     }
 
     writeAuthProfiles(store, id);
-    console.log(`Removed API key for provider "${provider}" from OpenClaw auth-profiles (agent: ${id})`);
   }
+  console.log(`Removed API key for provider "${provider}" from OpenClaw auth-profiles (agents: ${agentIds.join(', ')})`);
 }
 
 /**
@@ -261,7 +292,7 @@ export function setOpenClawDefaultModel(provider: string, modelOverride?: string
       ...existingProvider,
       baseUrl: providerCfg.baseUrl,
       api: providerCfg.api,
-      apiKey: `\${${providerCfg.apiKeyEnv}}`,
+      apiKey: providerCfg.apiKeyEnv,
       models: mergedModels,
     };
     console.log(`Configured models.providers.${provider} with baseUrl=${providerCfg.baseUrl}, model=${modelId}`);
@@ -346,27 +377,22 @@ export function setOpenClawDefaultModelWithOverride(
     const models = (config.models || {}) as Record<string, unknown>;
     const providers = (models.providers || {}) as Record<string, unknown>;
 
-    const existingProvider =
-      providers[provider] && typeof providers[provider] === 'object'
-        ? (providers[provider] as Record<string, unknown>)
-        : {};
-
-    // For runtime-configured providers (custom/ollama), replace the model list
-    // with only the currently selected model. This avoids stale entries when the
-    // user removes a model in the UI.
-    const freshModels: Array<Record<string, unknown>> = [];
+    // Replace the provider entry entirely rather than merging.
+    // Different custom/ollama provider instances have different baseUrls,
+    // so merging models from a previous instance creates an inconsistent
+    // config (models pointing at the wrong endpoint).
+    const nextModels: Array<Record<string, unknown>> = [];
     if (modelId) {
-      freshModels.push({ id: modelId, name: modelId });
+      nextModels.push({ id: modelId, name: modelId });
     }
 
     const nextProvider: Record<string, unknown> = {
-      ...existingProvider,
       baseUrl: override.baseUrl,
       api: override.api,
-      models: freshModels,
+      models: nextModels,
     };
     if (override.apiKeyEnv) {
-      nextProvider.apiKey = `\${${override.apiKeyEnv}}`;
+      nextProvider.apiKey = override.apiKeyEnv;
     }
 
     providers[provider] = nextProvider;

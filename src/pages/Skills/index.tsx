@@ -29,8 +29,6 @@ import {
   FolderOpen,
   ChevronLeft,
   Terminal,
-  Copy,
-  Check as CheckIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,7 +51,6 @@ import { useTranslation } from 'react-i18next';
 function CliInstallCard() {
   const { t } = useTranslation('skills');
   const { fetchSkills } = useSkillsStore();
-  const [copied, setCopied] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
   const [installing, setInstalling] = useState(false);
   const [progressMsg, setProgressMsg] = useState('');
@@ -76,19 +73,6 @@ function CliInstallCard() {
       return `skills add ${customUrl.trim()} --agent openclaw`;
     }
     return '';
-  };
-
-  const handleCopy = async () => {
-    const cmd = getCommand();
-    if (!cmd) return;
-    try {
-      const fullCmd = cmd.startsWith('npx ') ? cmd : `npx ${cmd}`;
-      await navigator.clipboard.writeText(fullCmd);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback
-    }
   };
 
   const handleInstall = async () => {
@@ -123,16 +107,6 @@ function CliInstallCard() {
       setInstalling(false);
       setTimeout(() => setProgressMsg(''), 3000);
     }
-  };
-
-  const handleOpenSkillsSh = () => {
-    try {
-      if (window.electron?.openExternal) {
-        window.electron.openExternal('https://skills.sh');
-      } else {
-        window.open('https://skills.sh', '_blank');
-      }
-    } catch { /* ignore */ }
   };
 
   return (

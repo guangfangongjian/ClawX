@@ -1098,11 +1098,11 @@ function registerProviderHandlers(gatewayManager: GatewayManager): void {
 
           if (provider.type === 'custom' || provider.type === 'ollama') {
             // For runtime-configured providers, use user-entered base URL/api.
-            const envVar = getProviderEnvVar(provider.type);
+            // Do NOT set apiKeyEnv — the OpenClaw gateway resolves custom
+            // provider keys via auth-profiles, not the config apiKey field.
             setOpenClawDefaultModelWithOverride(provider.type, modelOverride, {
               baseUrl: provider.baseUrl,
               api: 'openai-completions',
-              apiKeyEnv: envVar,
             });
           } else {
             setOpenClawDefaultModel(provider.type, modelOverride);
