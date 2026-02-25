@@ -1512,6 +1512,29 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
       .replace(/\r/g, '')
       .trim();
 
+    // Translate common English progress messages to Chinese
+    const translateProgress = (msg: string): string => {
+      const translations: [RegExp, string][] = [
+        [/^Cloning repository\.*/i, '正在克隆仓库...'],
+        [/^Repository cloned/i, '仓库克隆完成'],
+        [/^Found (\d+) skills?/i, '发现 $1 个技能'],
+        [/^Selected (\d+) skills?: (.+)/i, '已选择 $1 个技能: $2'],
+        [/^Installation scope/i, '安装范围确认'],
+        [/^Installation complete/i, '安装完成'],
+        [/^Installing .+ to/i, '正在安装技能...'],
+        [/^Installed (\d+) skills?/i, '已安装 $1 个技能'],
+        [/^Skipped (\d+) skills?/i, '跳过 $1 个技能（已存在）'],
+        [/^No skills found/i, '未找到技能'],
+        [/^Error/i, '错误'],
+      ];
+      for (const [pattern, replacement] of translations) {
+        if (pattern.test(msg)) {
+          return msg.replace(pattern, replacement);
+        }
+      }
+      return msg;
+    };
+
     return new Promise((resolve) => {
       const args = params.command.split(/\s+/).filter(Boolean);
       // Remove 'npx' prefix if present
@@ -1553,7 +1576,7 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
         const clean = stripAnsi(line);
         console.log(`[skills:installFromUrl] stdout: ${clean}`);
         if (clean) {
-          event.sender.send('skills:installProgress', { status: 'progress', message: clean });
+          event.sender.send('skills:installProgress', { status: 'progress', message: translateProgress(clean) });
         }
       });
 
