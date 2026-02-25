@@ -655,14 +655,19 @@ export class GatewayManager extends EventEmitter {
     }
 
     for (const providerType of providerTypes) {
+      const envVar = getProviderEnvVar(providerType);
+      if (!envVar) continue;
+      // Pre-set placeholder so ${...} references in openclaw.json
+      // don't cause Gateway to crash when a key hasn't been configured yet.
+      // Use a non-empty dummy value because openclaw treats empty strings as missing.
+      if (!(envVar in providerEnv)) {
+        providerEnv[envVar] = 'sk-not-configured';
+      }
       try {
         const key = await getApiKey(providerType);
         if (key) {
-          const envVar = getProviderEnvVar(providerType);
-          if (envVar) {
-            providerEnv[envVar] = key;
-            loadedProviderKeyCount++;
-          }
+          providerEnv[envVar] = key;
+          loadedProviderKeyCount++;
         }
       } catch (err) {
         logger.warn(`Failed to load API key for ${providerType}:`, err);
