@@ -46,6 +46,8 @@ Team members include [Peiban](https://github.com/peiban666) and [Shanhe Jinzeng 
 
 Compared with the upstream ClawX, this branch adds support for the [Hi Light](https://github.com/Gongcong/hi-light-plugin) application plugin, which is integrated into the project. Just as ClawX simplifies the use of OpenClaw for users, we provide more convenient use of Hi Light for Guangfan users.
 
+User Documentation: [ClawX & Hi Light Special Edition User Documentation](https://my.feishu.cn/wiki/T7VewIKVbiw8oFkixyVc0zM5nhe)
+
 ---
 ## Screenshot
 

@@ -49,7 +49,7 @@ fork分支维护，作为[光帆科技](https://guangfan.com/)核心用户，旨
 
 相较于上游ClawX而言，本分支增加了[Hi Light](https://github.com/Gongcong/hi-light-plugin)应用插件支持，集成在项目中，用户因为ClawX简化OpenClaw使用，我们为光帆用户提供Hi Light更便捷的使用。
 
----
+使用文档：[ClawX & Hi Light 特供版本使用文档](https://my.feishu.cn/wiki/T7VewIKVbiw8oFkixyVc0zM5nhe)
 
 ## 截图预览
 
