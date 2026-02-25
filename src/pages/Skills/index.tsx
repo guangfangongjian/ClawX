@@ -56,6 +56,16 @@ function CliInstallCard() {
   const [copied, setCopied] = useState(false);
   const [customUrl, setCustomUrl] = useState('');
   const [installing, setInstalling] = useState(false);
+  const [progressMsg, setProgressMsg] = useState('');
+
+  // Listen for install progress events
+  useEffect(() => {
+    const unsubscribe = window.electron.ipcRenderer.on('skills:installProgress', (data: unknown) => {
+      const { message } = data as { status: string; message: string };
+      if (message) setProgressMsg(message);
+    });
+    return () => { if (typeof unsubscribe === 'function') unsubscribe(); };
+  }, []);
 
   const getCommand = () => {
     if (customUrl.trim()) {
@@ -85,6 +95,7 @@ function CliInstallCard() {
     const cmd = getCommand();
     if (!cmd) return;
     setInstalling(true);
+    setProgressMsg('正在启动安装...');
     try {
       const result = await window.electron.ipcRenderer.invoke('skills:installFromUrl', { command: cmd }) as {
         success: boolean;
@@ -110,6 +121,7 @@ function CliInstallCard() {
       toast.error(String(error));
     } finally {
       setInstalling(false);
+      setTimeout(() => setProgressMsg(''), 3000);
     }
   };
 
@@ -129,12 +141,6 @@ function CliInstallCard() {
         <div className="flex items-center gap-2">
           <Terminal className="h-4 w-4 text-blue-400" />
           <span className="text-sm font-medium">{t('marketplace.cliInstall.title', { defaultValue: '命令行安装技能' })}</span>
-          <button
-            onClick={handleOpenSkillsSh}
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors ml-auto"
-          >
-            skills.sh ↗
-          </button>
         </div>
         <div className="flex gap-2">
           <Input
@@ -160,24 +166,12 @@ function CliInstallCard() {
             )}
           </Button>
         </div>
-        {customUrl.trim() && (
-          <div className="flex items-center gap-2">
-            <code className="flex-1 text-xs font-mono bg-black/30 rounded-md px-3 py-2 text-muted-foreground overflow-x-auto whitespace-nowrap">
-              npx {getCommand()}
-            </code>
-            <Button
-              variant="outline"
-              size="icon"
-              className="shrink-0 h-8 w-8"
-              onClick={handleCopy}
-            >
-              {copied ? <CheckIcon className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-            </Button>
+        {installing && progressMsg && (
+          <div className="flex items-center gap-2 text-xs text-blue-400">
+            <LoadingSpinner size="sm" />
+            <span className="truncate">{progressMsg}</span>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
-          {t('marketplace.cliInstall.hint', { defaultValue: '粘贴命令后点击安装，技能将安装到 ~/.openclaw/skills/，自动重启网关生效' })}
-        </p>
       </CardContent>
     </Card>
   );

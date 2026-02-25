@@ -171,6 +171,7 @@ const electronAPI = {
         'update:error',
         'update:auto-install-countdown',
         'cron:updated',
+        'skills:installProgress',
       ];
 
       if (validChannels.includes(channel)) {

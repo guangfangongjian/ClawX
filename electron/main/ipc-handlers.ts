@@ -1499,9 +1499,12 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
   });
 
   // Install skill from URL via npx skills CLI
-  ipcMain.handle('skills:installFromUrl', async (_, params: { command: string }) => {
+  ipcMain.handle('skills:installFromUrl', async (event, params: { command: string }) => {
     const { spawn } = require('child_process');
     const { homedir } = require('os');
+
+    // Strip ANSI escape codes for clean progress messages
+    const stripAnsi = (str: string) => str.replace(/\x1b\[[0-9;]*m/g, '').trim();
 
     return new Promise((resolve) => {
       const args = params.command.split(/\s+/).filter(Boolean);
@@ -1522,6 +1525,9 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
 
       console.log(`[skills:installFromUrl] Running: npx ${args.join(' ')}`);
 
+      // Send initial progress
+      event.sender.send('skills:installProgress', { status: 'starting', message: '正在启动安装...' });
+
       const isWin = process.platform === 'win32';
       const child = spawn(isWin ? 'npx.cmd' : 'npx', args, {
         cwd: homedir(),
@@ -1538,27 +1544,36 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
       child.stdout?.on('data', (data: Buffer) => {
         const line = data.toString();
         stdout += line;
-        console.log(`[skills:installFromUrl] stdout: ${line.trim()}`);
+        const clean = stripAnsi(line);
+        console.log(`[skills:installFromUrl] stdout: ${clean}`);
+        if (clean) {
+          event.sender.send('skills:installProgress', { status: 'progress', message: clean });
+        }
       });
 
       child.stderr?.on('data', (data: Buffer) => {
         const line = data.toString();
         stderr += line;
-        console.log(`[skills:installFromUrl] stderr: ${line.trim()}`);
+        const clean = stripAnsi(line);
+        console.log(`[skills:installFromUrl] stderr: ${clean}`);
       });
 
       child.on('error', (error: Error) => {
         console.error('[skills:installFromUrl] process error:', error);
+        event.sender.send('skills:installProgress', { status: 'error', message: error.message });
         resolve({ success: false, error: error.message });
       });
 
       child.on('close', (code: number | null) => {
         if (code === 0) {
           console.log('[skills:installFromUrl] success');
+          event.sender.send('skills:installProgress', { status: 'done', message: '安装完成' });
           resolve({ success: true, output: stdout.trim() });
         } else {
           console.error(`[skills:installFromUrl] failed with code ${code}`);
-          resolve({ success: false, error: stderr.trim() || stdout.trim() || `Process exited with code ${code}` });
+          const errMsg = stripAnsi(stderr) || stripAnsi(stdout) || `Process exited with code ${code}`;
+          event.sender.send('skills:installProgress', { status: 'error', message: errMsg });
+          resolve({ success: false, error: errMsg });
         }
       });
     });
