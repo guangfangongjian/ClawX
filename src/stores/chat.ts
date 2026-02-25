@@ -1322,8 +1322,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
           pendingToolImages: [],
         });
         // Reload sessions list & history for this session in background
+        // Use quiet mode (true) to avoid setting loading=true which hides streaming content
         void get().loadSessions();
-        void get().loadHistory();
+        void get().loadHistory(true);
       } else {
         // Not a new run start — skip events for non-current session
         return;
