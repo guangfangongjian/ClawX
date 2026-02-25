@@ -167,13 +167,15 @@ export class ClawHubService {
     }
 
     /**
-     * Search skills via HTTP API (clawhub.ai)
+     * Search skills via HTTP API (clawhub.ai /api/v1/search endpoint)
      */
     private async searchApi(query: string, limit?: number): Promise<ClawHubSkillResult[]> {
         const registry = 'https://clawhub.ai';
-        const url = new URL('/api/v1/skills', registry);
+        const url = new URL('/api/v1/search', registry);
         url.searchParams.set('q', query);
-        url.searchParams.set('limit', String(limit || 50));
+        if (limit) {
+            url.searchParams.set('limit', String(limit));
+        }
 
         console.log('[searchApi] Fetching:', url.toString());
         const res = await fetch(url.toString());
@@ -181,30 +183,21 @@ export class ClawHubService {
             throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
         const data = await res.json() as {
-            items: Array<{
+            results: Array<{
                 slug: string;
                 displayName: string;
                 summary?: string | null;
-                latestVersion?: { version: string } | null;
+                version?: string;
             }>;
         };
 
-        const mapped = (data.items || []).map(item => ({
+        console.log('[searchApi] results:', data.results?.length);
+        return (data.results || []).map(item => ({
             slug: item.slug,
             name: item.displayName || item.slug,
             description: item.summary || '',
-            version: item.latestVersion?.version || '0.0.0',
+            version: item.version || '0.0.0',
         }));
-
-        // Client-side filter in case the API ignores the q parameter
-        const q = query.toLowerCase();
-        const filtered = mapped.filter(s =>
-            s.slug.toLowerCase().includes(q) ||
-            s.name.toLowerCase().includes(q) ||
-            s.description.toLowerCase().includes(q)
-        );
-        console.log('[searchApi] total:', mapped.length, 'filtered:', filtered.length);
-        return filtered;
     }
 
     /**
