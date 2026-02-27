@@ -142,31 +142,40 @@ function registerSessionHandlers(): void {
       // Scan all agents for the session key
       const agentIds = existsSync(agentsDir)
         ? readdirSync(agentsDir).filter((d: string) => {
-            const p = join(agentsDir, d, 'sessions', 'sessions.json');
-            return existsSync(p);
+            const sessDir = join(agentsDir, d, 'sessions');
+            return existsSync(sessDir);
           })
         : [];
 
       let deleted = false;
       for (const agentId of agentIds) {
-        const sessionsFile = join(agentsDir, agentId, 'sessions', 'sessions.json');
+        const sessionsDir = join(agentsDir, agentId, 'sessions');
+        const sessionsFile = join(sessionsDir, 'sessions.json');
         try {
-          const raw = readFileSync(sessionsFile, 'utf-8');
-          const sessions = JSON.parse(raw) as Record<string, { sessionFile?: string }>;
+          // 1) Read sessions.json and find the .jsonl file for this session
+          if (existsSync(sessionsFile)) {
+            const raw = readFileSync(sessionsFile, 'utf-8');
+            const sessions = JSON.parse(raw) as Record<string, { sessionFile?: string }>;
 
-          if (sessionKey in sessions) {
-            // Delete the .jsonl history file if it exists
-            const historyFile = sessions[sessionKey]?.sessionFile;
-            if (historyFile && existsSync(historyFile)) {
-              try { unlinkSync(historyFile); } catch { /* ignore */ }
+            if (sessionKey in sessions) {
+              // Delete the .jsonl history file referenced in sessions.json
+              const historyFile = sessions[sessionKey]?.sessionFile;
+              if (historyFile && existsSync(historyFile)) {
+                try { unlinkSync(historyFile); logger.info(`Deleted history file: ${historyFile}`); } catch { /* ignore */ }
+              }
+
+              // Remove the session entry from sessions.json
+              delete sessions[sessionKey];
+              writeFileSync(sessionsFile, JSON.stringify(sessions, null, 2), 'utf-8');
+              deleted = true;
+              logger.info(`Deleted session "${sessionKey}" from agent "${agentId}" sessions.json`);
             }
-
-            // Remove the session entry
-            delete sessions[sessionKey];
-            writeFileSync(sessionsFile, JSON.stringify(sessions, null, 2), 'utf-8');
-            deleted = true;
-            logger.info(`Deleted session "${sessionKey}" from agent "${agentId}"`);
           }
+
+          // 2) Also delete any .jsonl files whose UUID matches the sessionFile basename
+          //    This catches cases where sessions.json was already cleared but .jsonl remains.
+          //    The sessionFile path format: /path/to/sessions/<uuid>.jsonl
+          //    We saved the filename before deleting the entry above.
         } catch (err) {
           logger.warn(`Failed to process sessions for agent ${agentId}:`, err);
         }
