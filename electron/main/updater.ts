@@ -64,6 +64,7 @@ export class AppUpdater extends EventEmitter {
     const version = app.getVersion();
     const channel = detectChannel(version);
 
+    const feedUrl = `https://github.com/guangfangongjian/ClawX/releases`;
     logger.info(`[Updater] Version: ${version}, channel: ${channel}, feedUrl: ${feedUrl}`);
 
     // Set channel so electron-updater requests the correct yml filename.
