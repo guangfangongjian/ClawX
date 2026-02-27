@@ -1583,6 +1583,72 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
     }
   });
 
+  // Install skill from URL via npx skills CLI
+  ipcMain.handle('skills:installFromUrl', async (_, params: { command: string }) => {
+    const { spawn } = require('child_process');
+    const { homedir } = require('os');
+
+    return new Promise((resolve) => {
+      const args = params.command.split(/\s+/).filter(Boolean);
+      // Remove 'npx' prefix if present
+      if (args[0] === 'npx') args.shift();
+
+      // Ensure --agent openclaw is included
+      if (!args.includes('--agent') && !args.includes('-a')) {
+        args.push('--agent', 'openclaw');
+      }
+      // Ensure global scope (-g) and non-interactive (-y) flags
+      if (!args.includes('-g') && !args.includes('--global')) {
+        args.push('-g');
+      }
+      if (!args.includes('-y') && !args.includes('--yes')) {
+        args.push('-y');
+      }
+
+      console.log(`[skills:installFromUrl] Running: npx ${args.join(' ')}`);
+
+      const isWin = process.platform === 'win32';
+      const child = spawn(isWin ? 'npx.cmd' : 'npx', args, {
+        cwd: homedir(),
+        shell: isWin,
+        env: {
+          ...process.env,
+          FORCE_COLOR: '0',
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      child.stdout?.on('data', (data: Buffer) => {
+        const line = data.toString();
+        stdout += line;
+        console.log(`[skills:installFromUrl] stdout: ${line.trim()}`);
+      });
+
+      child.stderr?.on('data', (data: Buffer) => {
+        const line = data.toString();
+        stderr += line;
+        console.log(`[skills:installFromUrl] stderr: ${line.trim()}`);
+      });
+
+      child.on('error', (error: Error) => {
+        console.error('[skills:installFromUrl] process error:', error);
+        resolve({ success: false, error: error.message });
+      });
+
+      child.on('close', (code: number | null) => {
+        if (code === 0) {
+          console.log('[skills:installFromUrl] success');
+          resolve({ success: true, output: stdout.trim() });
+        } else {
+          console.error(`[skills:installFromUrl] failed with code ${code}`);
+          resolve({ success: false, error: stderr.trim() || stdout.trim() || `Process exited with code ${code}` });
+        }
+      });
+    });
+  });
+
   // Open skill readme
   ipcMain.handle('clawhub:openSkillReadme', async (_, slug: string) => {
     try {
