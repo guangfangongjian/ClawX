@@ -3,7 +3,7 @@
  * Registers all IPC handlers for main-renderer communication
  */
 import { ipcMain, BrowserWindow, shell, dialog, app, nativeImage } from 'electron';
-import { existsSync, copyFileSync, statSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, copyFileSync, statSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, extname, basename } from 'node:path';
 import crypto from 'node:crypto';
@@ -106,6 +106,9 @@ export function registerIpcHandlers(
   // Log handlers (for UI to read gateway/app logs)
   registerLogHandlers();
 
+  // Session handlers (direct file deletion)
+  registerSessionHandlers();
+
   // Skill config handlers (direct file access, no Gateway RPC)
   registerSkillConfigHandlers();
 
@@ -123,6 +126,58 @@ export function registerIpcHandlers(
 
   // File staging handlers (upload/send separation)
   registerFileHandlers();
+}
+
+/**
+ * Session IPC handlers
+ * Used for true session deletion since the Gateway lacks a sessions.delete RPC.
+ */
+function registerSessionHandlers(): void {
+  logger.info('[session] Registering session:delete handler');
+  ipcMain.handle('session:delete', async (_, sessionKey: string) => {
+    logger.info(`[session:delete] Called with key="${sessionKey}"`);
+    try {
+      const agentsDir = join(homedir(), '.openclaw', 'agents');
+
+      // Scan all agents for the session key
+      const agentIds = existsSync(agentsDir)
+        ? readdirSync(agentsDir).filter((d: string) => {
+            const p = join(agentsDir, d, 'sessions', 'sessions.json');
+            return existsSync(p);
+          })
+        : [];
+
+      let deleted = false;
+      for (const agentId of agentIds) {
+        const sessionsFile = join(agentsDir, agentId, 'sessions', 'sessions.json');
+        try {
+          const raw = readFileSync(sessionsFile, 'utf-8');
+          const sessions = JSON.parse(raw) as Record<string, { sessionFile?: string }>;
+
+          if (sessionKey in sessions) {
+            // Delete the .jsonl history file if it exists
+            const historyFile = sessions[sessionKey]?.sessionFile;
+            if (historyFile && existsSync(historyFile)) {
+              try { unlinkSync(historyFile); } catch { /* ignore */ }
+            }
+
+            // Remove the session entry
+            delete sessions[sessionKey];
+            writeFileSync(sessionsFile, JSON.stringify(sessions, null, 2), 'utf-8');
+            deleted = true;
+            logger.info(`Deleted session "${sessionKey}" from agent "${agentId}"`);
+          }
+        } catch (err) {
+          logger.warn(`Failed to process sessions for agent ${agentId}:`, err);
+        }
+      }
+
+      return { success: true, deleted };
+    } catch (error) {
+      logger.error('session:delete failed:', error);
+      return { success: false, error: String(error) };
+    }
+  });
 }
 
 /**
@@ -1550,6 +1605,16 @@ function registerClawHubHandlers(clawHubService: ClawHubService): void {
       return { success: true, results };
     } catch (error) {
       return { success: false, error: String(error) };
+    }
+  });
+
+  // Explore skills via HTTP API (cursor pagination)
+  ipcMain.handle('clawhub:explore', async (_, params: { cursor?: string; limit?: number; sort?: string }) => {
+    try {
+      const result = await clawHubService.exploreApi(params);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, items: [], nextCursor: null, error: String(error) };
     }
   });
 
