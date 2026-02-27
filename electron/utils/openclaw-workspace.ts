@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { logger } from './logger';
@@ -20,6 +20,49 @@ export function mergeClawXSection(existing: string, section: string): string {
     return existing.slice(0, beginIdx) + wrapped + existing.slice(endIdx + CLAWX_END.length);
   }
   return existing.trimEnd() + '\n\n' + wrapped + '\n';
+}
+
+/**
+ * Detect and remove bootstrap .md files that contain only ClawX markers
+ * with no meaningful OpenClaw content outside them. This repairs a race
+ * condition where ensureClawXContext() created the file before the gateway
+ * could seed the full template. Deleting the hollow file lets the gateway
+ * re-seed the complete template on next start.
+ */
+export function repairClawXOnlyBootstrapFiles(): void {
+  const workspaceDirs = resolveAllWorkspaceDirs();
+  for (const workspaceDir of workspaceDirs) {
+    if (!existsSync(workspaceDir)) continue;
+    let entries: string[];
+    try {
+      entries = readdirSync(workspaceDir).filter((f) => f.endsWith('.md'));
+    } catch {
+      continue;
+    }
+    for (const file of entries) {
+      const filePath = join(workspaceDir, file);
+      let content: string;
+      try {
+        content = readFileSync(filePath, 'utf-8');
+      } catch {
+        continue;
+      }
+      const beginIdx = content.indexOf(CLAWX_BEGIN);
+      const endIdx = content.indexOf(CLAWX_END);
+      if (beginIdx === -1 || endIdx === -1) continue;
+
+      const before = content.slice(0, beginIdx).trim();
+      const after = content.slice(endIdx + CLAWX_END.length).trim();
+      if (before === '' && after === '') {
+        try {
+          unlinkSync(filePath);
+          logger.info(`Removed ClawX-only bootstrap file for re-seeding: ${file} (${workspaceDir})`);
+        } catch {
+          logger.warn(`Failed to remove ClawX-only bootstrap file: ${filePath}`);
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -73,29 +116,26 @@ function resolveAllWorkspaceDirs(): string[] {
 }
 
 /**
- * Ensure ClawX context snippets are merged into the openclaw workspace
- * bootstrap files. Reads `*.clawx.md` templates from resources/context/
- * and injects them as marker-delimited sections into the corresponding
- * workspace `.md` files (e.g. AGENTS.clawx.md -> AGENTS.md).
- *
- * Iterates over every discovered agent workspace so all agents receive
- * the ClawX context regardless of which one is active.
+ * Synchronously merge ClawX context snippets into workspace bootstrap
+ * files that already exist on disk. Returns the number of target files
+ * that were skipped because they don't exist yet.
  */
-export function ensureClawXContext(): void {
+function mergeClawXContextOnce(): number {
   const contextDir = join(getResourcesDir(), 'context');
   if (!existsSync(contextDir)) {
     logger.debug('ClawX context directory not found, skipping context merge');
-    return;
+    return 0;
   }
 
   let files: string[];
   try {
     files = readdirSync(contextDir).filter((f) => f.endsWith('.clawx.md'));
   } catch {
-    return;
+    return 0;
   }
 
   const workspaceDirs = resolveAllWorkspaceDirs();
+  let skipped = 0;
 
   for (const workspaceDir of workspaceDirs) {
     if (!existsSync(workspaceDir)) {
@@ -105,12 +145,15 @@ export function ensureClawXContext(): void {
     for (const file of files) {
       const targetName = file.replace('.clawx.md', '.md');
       const targetPath = join(workspaceDir, targetName);
-      const section = readFileSync(join(contextDir, file), 'utf-8');
 
-      let existing = '';
-      if (existsSync(targetPath)) {
-        existing = readFileSync(targetPath, 'utf-8');
+      if (!existsSync(targetPath)) {
+        logger.debug(`Skipping ${targetName} in ${workspaceDir} (file does not exist yet, will be seeded by gateway)`);
+        skipped++;
+        continue;
       }
+
+      const section = readFileSync(join(contextDir, file), 'utf-8');
+      const existing = readFileSync(targetPath, 'utf-8');
 
       const merged = mergeClawXSection(existing, section);
       if (merged !== existing) {
@@ -119,4 +162,37 @@ export function ensureClawXContext(): void {
       }
     }
   }
+
+  return skipped;
+}
+
+const RETRY_INTERVAL_MS = 2000;
+const MAX_RETRIES = 15;
+
+/**
+ * Ensure ClawX context snippets are merged into the openclaw workspace
+ * bootstrap files. Reads `*.clawx.md` templates from resources/context/
+ * and injects them as marker-delimited sections into the corresponding
+ * workspace `.md` files (e.g. AGENTS.clawx.md -> AGENTS.md).
+ *
+ * The gateway seeds workspace files asynchronously after its HTTP server
+ * starts, so the target files may not exist yet when this is first called.
+ * When files are missing, retries with a delay until all targets are merged
+ * or the retry budget is exhausted.
+ */
+export async function ensureClawXContext(): Promise<void> {
+  let skipped = mergeClawXContextOnce();
+  if (skipped === 0) return;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    await new Promise((r) => setTimeout(r, RETRY_INTERVAL_MS));
+    skipped = mergeClawXContextOnce();
+    if (skipped === 0) {
+      logger.info(`ClawX context merge completed after ${attempt} retry(ies)`);
+      return;
+    }
+    logger.debug(`ClawX context merge: ${skipped} file(s) still missing (retry ${attempt}/${MAX_RETRIES})`);
+  }
+
+  logger.warn(`ClawX context merge: ${skipped} file(s) still missing after ${MAX_RETRIES} retries`);
 }

@@ -12,6 +12,8 @@ export const BUILTIN_PROVIDER_TYPES = [
   'openrouter',
   'moonshot',
   'siliconflow',
+  'minimax-portal',
+  'qwen-portal',
   'ollama',
 ] as const;
 export type BuiltinProviderType = (typeof BUILTIN_PROVIDER_TYPES)[number];
@@ -32,6 +34,7 @@ interface ProviderBackendMeta {
     api: string;
     apiKeyEnv: string;
     models?: ProviderModelEntry[];
+    headers?: Record<string, string>;
   };
 }
 
@@ -63,6 +66,10 @@ const REGISTRY: Record<string, ProviderBackendMeta> = {
       baseUrl: 'https://openrouter.ai/api/v1',
       api: 'openai-completions',
       apiKeyEnv: 'OPENROUTER_API_KEY',
+      headers: {
+        'HTTP-Referer': 'https://claw-x.com',
+        'X-Title': 'ClawX',
+      },
     },
   },
   moonshot: {
@@ -94,6 +101,24 @@ const REGISTRY: Record<string, ProviderBackendMeta> = {
       apiKeyEnv: 'SILICONFLOW_API_KEY',
     },
   },
+  'minimax-portal': {
+    envVar: 'MINIMAX_API_KEY',
+    defaultModel: 'minimax-portal/MiniMax-M2.1',
+    providerConfig: {
+      baseUrl: 'https://api.minimax.io/anthropic',
+      api: 'anthropic-messages',
+      apiKeyEnv: 'MINIMAX_API_KEY',
+    },
+  },
+  'qwen-portal': {
+    envVar: 'QWEN_API_KEY',
+    defaultModel: 'qwen-portal/coder-model',
+    providerConfig: {
+      baseUrl: 'https://portal.qwen.ai/v1',
+      api: 'openai-completions',
+      apiKeyEnv: 'QWEN_API_KEY',
+    },
+  },
   custom: {
     envVar: 'CUSTOM_API_KEY',
   },
@@ -115,10 +140,10 @@ export function getProviderDefaultModel(type: string): string | undefined {
   return REGISTRY[type]?.defaultModel;
 }
 
-/** Get the OpenClaw provider config (baseUrl, api, apiKeyEnv, models) */
+/** Get the OpenClaw provider config (baseUrl, api, apiKeyEnv, models, headers) */
 export function getProviderConfig(
   type: string
-): { baseUrl: string; api: string; apiKeyEnv: string; models?: ProviderModelEntry[] } | undefined {
+): { baseUrl: string; api: string; apiKeyEnv: string; models?: ProviderModelEntry[]; headers?: Record<string, string> } | undefined {
   return REGISTRY[type]?.providerConfig;
 }
 

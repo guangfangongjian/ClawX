@@ -4,7 +4,6 @@
  */
 import { app, BrowserWindow, nativeImage, session, shell } from 'electron';
 import { join } from 'path';
-import { mkdirSync, existsSync, cpSync, writeFileSync, unlinkSync } from 'fs';
 import { GatewayManager } from '../gateway/manager';
 import { registerIpcHandlers } from './ipc-handlers';
 import { createTray } from './tray';
@@ -15,48 +14,14 @@ import { logger } from '../utils/logger';
 import { warmupNetworkOptimization } from '../utils/uv-env';
 
 import { ClawHubService } from '../gateway/clawhub';
-import { ensureClawXContext } from '../utils/openclaw-workspace';
-
-// For packaged app, redirect userData to %LOCALAPPDATA%/ClawX-Data
-// instead of %APPDATA%/ClawX to avoid non-ASCII path issues.
-// NOTE: Do NOT store userData inside the install directory — NSIS reinstall
-// runs the uninstaller first and wipes the entire install folder.
-if (app.isPackaged) {
-  const defaultUserData = app.getPath('userData'); // %APPDATA%/ClawX (before redirect)
-  const localAppData = process.env.LOCALAPPDATA;
-
-  if (localAppData) {
-    const newUserData = join(localAppData, 'ClawX-Data');
-    try {
-      mkdirSync(newUserData, { recursive: true });
-
-      // Migrate from default %APPDATA%/ClawX on first redirect
-      // so upgrades from older versions preserve config / setup state
-      if (newUserData !== defaultUserData) {
-        const hasOldData = existsSync(join(defaultUserData, 'Local Storage'));
-        const hasNewData = existsSync(join(newUserData, 'Local Storage'));
-        if (hasOldData && !hasNewData) {
-          try {
-            cpSync(defaultUserData, newUserData, { recursive: true, force: false });
-          } catch {
-            // Migration failed, user will see setup wizard again
-          }
-        }
-      }
-
-      app.setPath('userData', newUserData);
-    } catch {
-      // Final fallback: default Electron userData
-    }
-  }
-}
+import { ensureClawXContext, repairClawXOnlyBootstrapFiles } from '../utils/openclaw-workspace';
+import { isQuitting, setQuitting } from './app-state';
 
 // Disable GPU acceleration for better compatibility
 app.disableHardwareAcceleration();
 
 // Global references
 let mainWindow: BrowserWindow | null = null;
-let isQuitting = false;
 const gatewayManager = new GatewayManager();
 const clawHubService = new ClawHubService();
 
@@ -157,16 +122,6 @@ async function initialize(): Promise<void> {
   // Create system tray
   createTray(mainWindow);
 
-  // Inject OpenRouter site headers (HTTP-Referer & X-Title) for rankings on openrouter.ai
-  session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: ['https://openrouter.ai/*'] },
-    (details, callback) => {
-      details.requestHeaders['HTTP-Referer'] = 'https://claw-x.com';
-      details.requestHeaders['X-Title'] = 'ClawX';
-      callback({ requestHeaders: details.requestHeaders });
-    },
-  );
-
   // Override security headers ONLY for the OpenClaw Gateway Control UI
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     const isGatewayUrl = details.url.includes('127.0.0.1:18789') || details.url.includes('localhost:18789');
@@ -213,14 +168,16 @@ async function initialize(): Promise<void> {
     mainWindow = null;
   });
 
-  // Merge ClawX context snippets into the openclaw workspace bootstrap files
+  // Repair any bootstrap files that only contain ClawX markers (no OpenClaw
+  // template content). This fixes a race condition where ensureClawXContext()
+  // previously created the file before the gateway could seed the full template.
   try {
-    ensureClawXContext();
+    repairClawXOnlyBootstrapFiles();
   } catch (error) {
-    logger.warn('Failed to merge ClawX context into workspace:', error);
+    logger.warn('Failed to repair bootstrap files:', error);
   }
 
-  // Start Gateway automatically
+  // Start Gateway automatically (this seeds missing bootstrap files with full templates)
   try {
     logger.debug('Auto-starting Gateway...');
     await gatewayManager.start();
@@ -229,35 +186,41 @@ async function initialize(): Promise<void> {
     logger.error('Gateway auto-start failed:', error);
     mainWindow?.webContents.send('gateway:error', String(error));
   }
+
+  // Merge ClawX context snippets into the workspace bootstrap files.
+  // The gateway seeds workspace files asynchronously after its HTTP server
+  // is ready, so ensureClawXContext will retry until the target files appear.
+  void ensureClawXContext().catch((error) => {
+    logger.warn('Failed to merge ClawX context into workspace:', error);
+  });
+
+  // Re-apply ClawX context after every gateway restart because the gateway
+  // may re-seed workspace files with clean templates (losing ClawX markers).
+  gatewayManager.on('status', (status: { state: string }) => {
+    if (status.state === 'running') {
+      void ensureClawXContext().catch((error) => {
+        logger.warn('Failed to re-merge ClawX context after gateway reconnect:', error);
+      });
+    }
+  });
 }
 
-// Single-instance lock: prevent multiple instances when app is minimized to tray
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on('second-instance', () => {
-    // When a second instance is launched, focus the existing window
-    if (mainWindow) {
-      if (!mainWindow.isVisible()) mainWindow.show();
-      if (mainWindow.isMinimized()) mainWindow.restore();
+// Application lifecycle
+app.whenReady().then(() => {
+  initialize();
+
+  // Register activate handler AFTER app is ready to prevent
+  // "Cannot create BrowserWindow before app is ready" on macOS.
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      mainWindow = createWindow();
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      // On macOS, clicking the dock icon should show the window if it's hidden
+      mainWindow.show();
       mainWindow.focus();
     }
   });
-
-  // Application lifecycle
-  app.whenReady().then(() => {
-    initialize();
-
-    // Register activate handler AFTER app is ready to prevent
-    // "Cannot create BrowserWindow before app is ready" on macOS.
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        mainWindow = createWindow();
-      }
-    });
-  });
-}
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -265,9 +228,13 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('before-quit', async () => {
-  isQuitting = true;
-  await gatewayManager.stop();
+app.on('before-quit', () => {
+  setQuitting();
+  // Fire-and-forget: do not await gatewayManager.stop() here.
+  // Awaiting inside before-quit can stall Electron's quit sequence.
+  void gatewayManager.stop().catch((err) => {
+    logger.warn('gatewayManager.stop() error during quit:', err);
+  });
 });
 
 // Export for testing

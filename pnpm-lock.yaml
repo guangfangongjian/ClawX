@@ -11,6 +11,9 @@ importers:
       '@art_style666/hi-light':
         specifier: ^2.0.1
         version: 2.0.1
+      clawhub:
+        specifier: ^0.5.0
+        version: 0.5.0
       electron-store:
         specifier: ^11.0.2
         version: 11.0.2
@@ -96,9 +99,6 @@ importers:
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
-      clawhub:
-        specifier: ^0.5.0
-        version: 0.5.0
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

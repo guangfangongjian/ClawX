@@ -77,6 +77,8 @@ const electronAPI = {
         'provider:setDefault',
         'provider:getDefault',
         'provider:validateKey',
+        'provider:requestOAuth',
+        'provider:cancelOAuth',
         // Cron
         'cron:list',
         'cron:create',
@@ -172,6 +174,9 @@ const electronAPI = {
         'update:auto-install-countdown',
         'cron:updated',
         'skills:installProgress',
+        'oauth:code',
+        'oauth:success',
+        'oauth:error',
       ];
 
       if (validChannels.includes(channel)) {
@@ -211,6 +216,9 @@ const electronAPI = {
         'update:downloaded',
         'update:error',
         'update:auto-install-countdown',
+        'oauth:code',
+        'oauth:success',
+        'oauth:error',
       ];
 
       if (validChannels.includes(channel)) {

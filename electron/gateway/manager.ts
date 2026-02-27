@@ -13,7 +13,8 @@ import {
   getOpenClawDir, 
   getOpenClawEntryPath, 
   isOpenClawBuilt, 
-  isOpenClawPresent 
+  isOpenClawPresent,
+  quoteForCmd,
 } from '../utils/paths';
 import { getSetting } from '../utils/store';
 import { getApiKey, getDefaultProvider, getProvider } from '../utils/secure-storage';
@@ -30,7 +31,7 @@ import {
   type DeviceIdentity,
 } from '../utils/device-identity';
 import { ensureRequiredPlugins } from '../utils/plugin-install';
-import { ensureTokenOptimization, syncAgentConfigs } from '../utils/openclaw-auth';
+import { syncGatewayTokenToConfig, syncBrowserConfigToOpenClaw } from '../utils/openclaw-auth';
 
 /**
  * Gateway connection status
@@ -123,7 +124,6 @@ export class GatewayManager extends EventEmitter {
   private reconnectConfig: ReconnectConfig;
   private shouldReconnect = true;
   private startLock = false;
-  private startAbort: AbortController | null = null;
   private lastSpawnSummary: string | null = null;
   private pendingRequests: Map<string, {
     resolve: (value: unknown) => void;
@@ -208,15 +208,9 @@ export class GatewayManager extends EventEmitter {
     }
     
     this.startLock = true;
-    this.startAbort = new AbortController();
     logger.info(`Gateway start requested (port=${this.status.port})`);
     this.lastSpawnSummary = null;
     this.shouldReconnect = true;
-
-    // Ensure token-optimization config (contextPruning, compaction) before Gateway reads it
-    try { ensureTokenOptimization(); } catch { /* non-fatal */ }
-    // Sync auth.json / models.json from main agent to all other agents
-    try { syncAgentConfigs(); } catch { /* non-fatal */ }
 
     // Manual start should override and cancel any pending reconnect timer.
     if (this.reconnectTimer) {
@@ -282,7 +276,6 @@ export class GatewayManager extends EventEmitter {
       throw error;
     } finally {
       this.startLock = false;
-      this.startAbort = null;
     }
   }
   
@@ -293,11 +286,6 @@ export class GatewayManager extends EventEmitter {
     logger.info('Gateway stop requested');
     // Disable auto-reconnect
     this.shouldReconnect = false;
-
-    // Abort any in-flight start/waitForReady loop
-    if (this.startAbort) {
-      this.startAbort.abort();
-    }
     
     // Clear all timers
     this.clearAllTimers();
@@ -318,7 +306,7 @@ export class GatewayManager extends EventEmitter {
       this.ws = null;
     }
     
-    // Kill process and wait for it to actually exit (so the port is released)
+    // Kill process
     if (this.process && this.ownsProcess) {
       const child = this.process;
       
@@ -383,10 +371,6 @@ export class GatewayManager extends EventEmitter {
   async restart(): Promise<void> {
     logger.debug('Gateway restart requested');
     await this.stop();
-    // After stop(), the previous start() flow may still be unwinding its
-    // try/catch/finally (which resets startLock). Yield to the event loop
-    // so the finally block can execute before we attempt a new start().
-    await new Promise(resolve => setTimeout(resolve, 50));
     await this.start();
   }
   
@@ -496,6 +480,63 @@ export class GatewayManager extends EventEmitter {
   }
   
   /**
+   * Unload the system-managed openclaw gateway launchctl service if it is
+   * loaded.  Without this, killing the process only causes launchctl to
+   * respawn it, leading to an infinite reconnect loop.
+   */
+  private async unloadLaunchctlService(): Promise<void> {
+    if (process.platform !== 'darwin') return;
+
+    try {
+      const uid = process.getuid?.();
+      if (uid === undefined) return;
+
+      const LAUNCHD_LABEL = 'ai.openclaw.gateway';
+      const serviceTarget = `gui/${uid}/${LAUNCHD_LABEL}`;
+
+      const loaded = await new Promise<boolean>((resolve) => {
+        import('child_process').then(cp => {
+          cp.exec(`launchctl print ${serviceTarget}`, { timeout: 5000 }, (err) => {
+            resolve(!err);
+          });
+        }).catch(() => resolve(false));
+      });
+
+      if (!loaded) return;
+
+      logger.info(`Unloading launchctl service ${serviceTarget} to prevent auto-respawn`);
+      await new Promise<void>((resolve) => {
+        import('child_process').then(cp => {
+          cp.exec(`launchctl bootout ${serviceTarget}`, { timeout: 10000 }, (err) => {
+            if (err) {
+              logger.warn(`Failed to bootout launchctl service: ${err.message}`);
+            } else {
+              logger.info('Successfully unloaded launchctl gateway service');
+            }
+            resolve();
+          });
+        }).catch(() => resolve());
+      });
+
+      await new Promise(r => setTimeout(r, 2000));
+
+      // Remove the plist so the service won't reload on next login.
+      try {
+        const { homedir } = await import('os');
+        const plistPath = path.join(homedir(), 'Library', 'LaunchAgents', `${LAUNCHD_LABEL}.plist`);
+        const { access, unlink } = await import('fs/promises');
+        await access(plistPath);
+        await unlink(plistPath);
+        logger.info(`Removed legacy launchd plist to prevent reload on next login: ${plistPath}`);
+      } catch {
+        // File doesn't exist or can't be removed -- not fatal
+      }
+    } catch (err) {
+      logger.warn('Error while unloading launchctl gateway service:', err);
+    }
+  }
+
+  /**
    * Find existing Gateway process by attempting a WebSocket connection
    */
   private async findExistingGateway(): Promise<{ port: number, externalToken?: string } | null> {
@@ -520,6 +561,11 @@ export class GatewayManager extends EventEmitter {
           if (pids.length > 0) {
             if (!this.process || !pids.includes(String(this.process.pid))) {
                logger.info(`Found orphaned process listening on port ${port} (PIDs: ${pids.join(', ')}), attempting to kill...`);
+
+               // Unload the launchctl service first so macOS doesn't auto-
+               // respawn the process we're about to kill.
+               await this.unloadLaunchctlService();
+
                // SIGTERM first so the gateway can clean up its lock file.
                for (const pid of pids) {
                  try { process.kill(parseInt(pid), 'SIGTERM'); } catch { /* ignore */ }
@@ -569,6 +615,9 @@ export class GatewayManager extends EventEmitter {
    * Uses OpenClaw npm package from node_modules (dev) or resources (production)
    */
   private async startProcess(): Promise<void> {
+    // Ensure no system-managed gateway service will compete with our process.
+    await this.unloadLaunchctlService();
+
     const openclawDir = getOpenClawDir();
     const entryScript = getOpenClawEntryPath();
     
@@ -581,6 +630,23 @@ export class GatewayManager extends EventEmitter {
     
     // Get or generate gateway token
     const gatewayToken = await getSetting('gatewayToken');
+
+    // Write our token into openclaw.json before starting the process.
+    // Without --dev the gateway authenticates using the token in
+    // openclaw.json; if that file has a stale token (e.g. left by the
+    // system-managed launchctl service) the WebSocket handshake will fail
+    // with "token mismatch" even though we pass --token on the CLI.
+    try {
+      syncGatewayTokenToConfig(gatewayToken);
+    } catch (err) {
+      logger.warn('Failed to sync gateway token to openclaw.json:', err);
+    }
+
+    try {
+      syncBrowserConfigToOpenClaw();
+    } catch (err) {
+      logger.warn('Failed to sync browser config to openclaw.json:', err);
+    }
     
     let command: string;
     let args: string[];
@@ -590,7 +656,7 @@ export class GatewayManager extends EventEmitter {
     // In packaged Electron app, use process.execPath with ELECTRON_RUN_AS_NODE=1
     // which makes the Electron binary behave as plain Node.js.
     // In development, use system 'node'.
-    const gatewayArgs = ['gateway', '--port', String(this.status.port), '--token', gatewayToken, '--dev', '--allow-unconfigured'];
+    const gatewayArgs = ['gateway', '--port', String(this.status.port), '--token', gatewayToken, '--allow-unconfigured'];
     
     if (app.isPackaged) {
       // Production: use Electron binary as Node.js via ELECTRON_RUN_AS_NODE
@@ -655,19 +721,14 @@ export class GatewayManager extends EventEmitter {
     }
 
     for (const providerType of providerTypes) {
-      const envVar = getProviderEnvVar(providerType);
-      if (!envVar) continue;
-      // Pre-set placeholder so ${...} references in openclaw.json
-      // don't cause Gateway to crash when a key hasn't been configured yet.
-      // Use a non-empty dummy value because openclaw treats empty strings as missing.
-      if (!(envVar in providerEnv)) {
-        providerEnv[envVar] = 'sk-not-configured';
-      }
       try {
         const key = await getApiKey(providerType);
         if (key) {
-          providerEnv[envVar] = key;
-          loadedProviderKeyCount++;
+          const envVar = getProviderEnvVar(providerType);
+          if (envVar) {
+            providerEnv[envVar] = key;
+            loadedProviderKeyCount++;
+          }
         }
       } catch (err) {
         logger.warn(`Failed to load API key for ${providerType}:`, err);
@@ -705,11 +766,15 @@ export class GatewayManager extends EventEmitter {
         }
       }
 
-      this.process = spawn(command, args, {
+      const useShell = !app.isPackaged && process.platform === 'win32';
+      const spawnCmd = useShell ? quoteForCmd(command) : command;
+      const spawnArgs = useShell ? args.map(a => quoteForCmd(a)) : args;
+
+      this.process = spawn(spawnCmd, spawnArgs, {
         cwd: openclawDir,
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
-        shell: !app.isPackaged && process.platform === 'win32', // shell only in dev on Windows
+        shell: useShell,
         env: spawnEnv,
       });
       const child = this.process;
@@ -773,10 +838,6 @@ export class GatewayManager extends EventEmitter {
   private async waitForReady(retries = 2400, interval = 250): Promise<void> {
     const child = this.process;
     for (let i = 0; i < retries; i++) {
-      // Early exit if start was aborted (e.g. by stop/restart)
-      if (this.startAbort?.signal.aborted) {
-        throw new Error('Gateway start aborted');
-      }
       // Early exit if the gateway process has already exited
       if (child && (child.exitCode !== null || child.signalCode !== null)) {
         const code = child.exitCode;
@@ -1095,7 +1156,6 @@ export class GatewayManager extends EventEmitter {
       return;
     }
     
-    // Emit generic message for other handlers
     this.emit('message', message);
   }
   
@@ -1103,30 +1163,34 @@ export class GatewayManager extends EventEmitter {
    * Handle OpenClaw protocol events
    */
   private handleProtocolEvent(event: string, payload: unknown): void {
-    if (event !== 'tick') {
-      const payloadKeys = payload && typeof payload === 'object' ? Object.keys(payload as object) : [];
-      logger.debug(`[protocol-event] event=${event} payloadKeys=${payloadKeys.join(',')}`);
-      if (event === 'agent' && payload && typeof payload === 'object') {
-        const p = payload as Record<string, unknown>;
-        const d = p.data && typeof p.data === 'object' ? p.data as Record<string, unknown> : null;
-        logger.debug(`[protocol-event:agent] runId=${p.runId} sessionKey=${p.sessionKey} stream=${p.stream} data.keys=${d ? Object.keys(d).join(',') : 'null'} data.state=${d?.state}`);
-      }
-    }
-    // Map OpenClaw events to our internal event types
     switch (event) {
       case 'tick':
-        // Heartbeat tick, ignore
         break;
       case 'chat':
         this.emit('chat:message', { message: payload });
         break;
-      // Agent events fall through to default → emitted as notifications.
-      // The renderer handles them via gateway:notification IPC channel.
+      case 'agent': {
+        // Agent events may carry chat streaming data inside payload.data,
+        // or be lifecycle events (phase=started/completed) with no message.
+        const p = payload as Record<string, unknown>;
+        const data = (p.data && typeof p.data === 'object') ? p.data as Record<string, unknown> : {};
+        const chatEvent: Record<string, unknown> = {
+          ...data,
+          runId: p.runId ?? data.runId,
+          sessionKey: p.sessionKey ?? data.sessionKey,
+          state: p.state ?? data.state,
+          message: p.message ?? data.message,
+        };
+        if (chatEvent.state || chatEvent.message) {
+          this.emit('chat:message', { message: chatEvent });
+        }
+        this.emit('notification', { method: event, params: payload });
+        break;
+      }
       case 'channel.status':
         this.emit('channel:status', payload as { channelId: string; status: string });
         break;
       default:
-        // Forward unknown events as generic notifications
         this.emit('notification', { method: event, params: payload });
     }
   }

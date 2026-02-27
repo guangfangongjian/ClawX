@@ -2,12 +2,12 @@
 
 ### uv (Python)
 
-- `uv` is the default Python environment manager. It is bundled with ClawX and on PATH.
-- Use `uv run python <script>` to execute Python scripts.
-- Use `uv pip install <package>` to install packages.
-- Do NOT use bare `python` or `pip` -- always go through `uv`.
+- `uv` is bundled with ClawX and on PATH. Do NOT use bare `python` or `pip`.
+- Run scripts: `uv run python <script>` | Install packages: `uv pip install <package>`
 
 ### Browser
 
-- Use the `browser` tool to open URLs in the user's default browser.
-- When the user asks to "open" a link, default to opening it in the browser.
+- `browser` tool provides full automation (scraping, form filling, testing) via an isolated managed browser.
+- Flow: `action="start"` → `action="snapshot"` (see page + get element refs like `e12`) → `action="act"` (click/type using refs).
+- Open new tabs: `action="open"` with `targetUrl`.
+- To just open a URL for the user to view, use `shell:openExternal` instead.

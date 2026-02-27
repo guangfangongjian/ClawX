@@ -1,6 +1,6 @@
 {
     "name": "clawx",
-    "version": "0.1.18-alpha.2",
+    "version": "0.1.19",
     "pnpm": {
         "onlyBuiltDependencies": [
             "@whiskeysockets/baileys",
@@ -43,6 +43,7 @@
     },
     "dependencies": {
         "@art_style666/hi-light": "^2.0.1",
+        "clawhub": "^0.5.0",
         "electron-store": "^11.0.2",
         "electron-updater": "^6.8.3",
         "ws": "^8.19.0"
@@ -73,7 +74,6 @@
         "@vitejs/plugin-react": "^5.1.4",
         "autoprefixer": "^10.4.24",
         "class-variance-authority": "^0.7.1",
-        "clawhub": "^0.5.0",
         "clsx": "^2.1.1",
         "electron": "^40.6.0",
         "electron-builder": "^26.8.1",
