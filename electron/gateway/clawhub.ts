@@ -360,9 +360,10 @@ export class ClawHubService {
                 break;
             } catch (error) {
                 const errMsg = String(error);
-                if (errMsg.includes('Rate limit') && attempt < maxRetries) {
+                const isRetryable = errMsg.includes('Rate limit') || errMsg.includes('Timeout') || errMsg.includes('ETIMEDOUT') || errMsg.includes('ECONNRESET');
+                if (isRetryable && attempt < maxRetries) {
                     const delay = (attempt + 1) * 3000;
-                    console.warn(`[install] Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
+                    console.warn(`[install] Retryable error, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries}): ${errMsg.substring(0, 100)}`);
                     await new Promise(resolve => setTimeout(resolve, delay));
                     continue;
                 }
