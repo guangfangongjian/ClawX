@@ -1103,6 +1103,15 @@ export class GatewayManager extends EventEmitter {
    * Handle OpenClaw protocol events
    */
   private handleProtocolEvent(event: string, payload: unknown): void {
+    if (event !== 'tick') {
+      const payloadKeys = payload && typeof payload === 'object' ? Object.keys(payload as object) : [];
+      logger.debug(`[protocol-event] event=${event} payloadKeys=${payloadKeys.join(',')}`);
+      if (event === 'agent' && payload && typeof payload === 'object') {
+        const p = payload as Record<string, unknown>;
+        const d = p.data && typeof p.data === 'object' ? p.data as Record<string, unknown> : null;
+        logger.debug(`[protocol-event:agent] runId=${p.runId} sessionKey=${p.sessionKey} stream=${p.stream} data.keys=${d ? Object.keys(d).join(',') : 'null'} data.state=${d?.state}`);
+      }
+    }
     // Map OpenClaw events to our internal event types
     switch (event) {
       case 'tick':
@@ -1111,6 +1120,8 @@ export class GatewayManager extends EventEmitter {
       case 'chat':
         this.emit('chat:message', { message: payload });
         break;
+      // Agent events fall through to default → emitted as notifications.
+      // The renderer handles them via gateway:notification IPC channel.
       case 'channel.status':
         this.emit('channel:status', payload as { channelId: string; status: string });
         break;

@@ -1297,6 +1297,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const eventState = String(event.state || '');
     const eventSessionKey = event.sessionKey ? String(event.sessionKey) : '';
     const { activeRunId, currentSessionKey, sending } = get();
+    console.log(`[handleChatEvent] state=${eventState} runId=${runId?.slice(0,8)} session=${eventSessionKey?.slice(-20)} current=${currentSessionKey?.slice(-20)} sending=${sending} activeRun=${activeRunId?.slice(0,8)||'null'} msgKeys=${event.message ? Object.keys(event.message as object).join(',') : 'none'}`);
 
     // Auto-switch to externally triggered session (Feishu, Telegram, etc.)
     // so the user sees thinking/streaming progress in real-time.
@@ -1338,6 +1339,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // so that streaming UI and stop button appear without manual refresh.
     if (!sending && runId && (eventState === 'delta' || (!eventState && event.message))) {
       set({ sending: true, activeRunId: runId });
+      // Fetch the user's incoming message that triggered this run
+      void get().loadHistory(true);
     }
 
     _lastChatEventAt = Date.now();
@@ -1361,17 +1364,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     switch (resolvedState) {
       case 'delta': {
         // Streaming update - store the cumulative message
-        const updates = collectToolUpdates(event.message, resolvedState);
-        set((s) => ({
-          streamingMessage: (() => {
-            if (event.message && typeof event.message === 'object') {
-              const msgRole = (event.message as RawMessage).role;
-              if (isToolResultRole(msgRole)) return s.streamingMessage;
-            }
-            return event.message ?? s.streamingMessage;
-          })(),
-          streamingTools: updates.length > 0 ? upsertToolStatuses(s.streamingTools, updates) : s.streamingTools,
-        }));
+        // Simply set the incoming message directly for real-time display
+        if (event.message && typeof event.message === 'object') {
+          const msgRole = (event.message as RawMessage).role;
+          if (!isToolResultRole(msgRole)) {
+            const updates = collectToolUpdates(event.message, resolvedState);
+            set({
+              streamingMessage: event.message,
+              streamingTools: updates.length > 0 ? upsertToolStatuses(get().streamingTools, updates) : get().streamingTools,
+            });
+          }
+        }
         break;
       }
       case 'final': {
