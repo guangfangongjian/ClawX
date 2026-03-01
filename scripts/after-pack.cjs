@@ -292,6 +292,19 @@ exports.default = async function afterPack(context) {
   cpSync(openclawBuildDir, openclawRoot, { recursive: true });
   console.log('[after-pack] ✅ openclaw bundle copied (including node_modules).');
 
+  // 1.0.1 Copy build/plugins/ to resources/plugins/ (hi-light and other custom plugins)
+  //       electron-builder skips this because .gitignore contains "build/"
+  const buildPluginsDir = join(__dirname, '..', 'build', 'plugins');
+  const pluginsDest = join(resourcesDir, 'plugins');
+  if (existsSync(buildPluginsDir)) {
+    console.log(`[after-pack] Copying build/plugins to ${pluginsDest} ...`);
+    mkdirSync(pluginsDest, { recursive: true });
+    cpSync(buildPluginsDir, pluginsDest, { recursive: true });
+    console.log('[after-pack] ✅ build/plugins copied.');
+  } else {
+    console.warn('[after-pack] ⚠️  build/plugins not found, skipping custom plugins.');
+  }
+
   // 1.1 Bundle OpenClaw plugins directly from node_modules into packaged resources.
   //     This is intentionally done in afterPack (not extraResources) because:
   //     - electron-builder silently skips extraResources entries whose source
