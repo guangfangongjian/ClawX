@@ -1380,12 +1380,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const eventState = String(event.state || '');
     const eventSessionKey = event.sessionKey ? String(event.sessionKey) : '';
     const { activeRunId, currentSessionKey, sending } = get();
-    console.log(`[handleChatEvent] state=${eventState} runId=${runId?.slice(0,8)} session=${eventSessionKey?.slice(-20)} current=${currentSessionKey?.slice(-20)} sending=${sending} activeRun=${activeRunId?.slice(0,8)||'null'} msgKeys=${event.message ? Object.keys(event.message as object).join(',') : 'none'}`);
 
     // Auto-switch to externally triggered session (Feishu, Telegram, etc.)
     // so the user sees thinking/streaming progress in real-time.
     if (eventSessionKey && eventSessionKey !== currentSessionKey) {
-      if (!sending && runId && (eventState === 'delta' || (!eventState && event.message))) {
+      if (!sending && runId && (eventState === 'delta' || eventState === 'started' || (!eventState && event.message))) {
         // New run starting on a different session — switch to it
         const existingSessions = get().sessions;
         const sessionExists = existingSessions.some(s => s.key === eventSessionKey);
@@ -1448,9 +1447,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
       || resolvedState === 'error' || resolvedState === 'aborted';
     if (hasUsefulData) {
       clearHistoryPoll();
+      // Adopt run started from another client (e.g. console at 127.0.0.1:18789):
+      // show loading/streaming in the app when this session has an active run.
+      const { sending } = get();
+      if (!sending && runId) {
+        set({ sending: true, activeRunId: runId, error: null });
+      }
     }
 
     switch (resolvedState) {
+      case 'started': {
+        // Run just started (e.g. from console); show loading immediately.
+        const { sending: currentSending } = get();
+        if (!currentSending && runId) {
+          set({ sending: true, activeRunId: runId, error: null });
+        }
+        break;
+      }
       case 'delta': {
         // If we're receiving new deltas, the Gateway has recovered from any
         // prior error — cancel the error finalization timer and clear the

@@ -38,114 +38,19 @@ export function Chat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [streamingTimestamp, setStreamingTimestamp] = useState<number>(0);
 
-  // Handle external agent events (Feishu, Telegram, etc.) for real-time updates.
-  //
-  // Key insight: The Gateway does NOT stream progressively. All delta events
-  // arrive in a ~200ms burst alongside the final event. However, the
-  // lifecycle.start event arrives ~25s BEFORE any deltas — this is our
-  // early signal to switch sessions and show the user's incoming message.
-  //
-  // Flow:
-  //   1. lifecycle.start → switch session, load history (shows user msg), set sending=true
-  //   2. (25s of Gateway processing — user sees "Thinking..." indicator)
-  //   3. delta burst + final → load history again (shows assistant response), set sending=false
-  useEffect(() => {
-    // Track active run to avoid processing stale events
-    let activeExtRunId = '';
-
-    const unsubNotif = window.electron.ipcRenderer.on('gateway:notification', (notification) => {
-      const payload = notification as { method?: string; params?: Record<string, unknown> } | undefined;
-      if (!payload || payload.method !== 'agent' || !payload.params) return;
-
-      const p = payload.params;
-      const streamType = p.stream ? String(p.stream) : '';
-      const data = (p.data && typeof p.data === 'object') ? p.data as Record<string, unknown> : {};
-      const runId = p.runId ? String(p.runId) : '';
-      const sessionKey = p.sessionKey ? String(p.sessionKey) : '';
-
-      // lifecycle.start: new run starting — switch session and show user message
-      if (streamType === 'lifecycle' && (data.phase === 'started' || data.startedAt)) {
-        activeExtRunId = runId;
-        const store = useChatStore.getState();
-        // Only auto-switch if we're not already sending (avoid interrupting user's own chat)
-        if (sessionKey && !store.sending) {
-          // Switch to the external session and load its history
-          useChatStore.setState({
-            currentSessionKey: sessionKey,
-            messages: [],
-            sending: true,
-            activeRunId: runId || null,
-            streamingMessage: null,
-            streamingText: '',
-            streamingTools: [],
-            error: null,
-          });
-          void useChatStore.getState().loadSessions();
-          void useChatStore.getState().loadHistory(true);
-        }
-        return;
-      }
-
-      // lifecycle.end: run finished — handled by the chat final event below
-      if (streamType === 'lifecycle') return;
-
-      // Delta events (thinking/assistant) — update streamingMessage for the active run
-      if (runId && runId === activeExtRunId) {
-        let message: Record<string, unknown> | undefined;
-        if (data.text !== undefined) {
-          if (streamType === 'thinking') {
-            message = { role: 'assistant', content: [{ type: 'thinking', thinking: String(data.text) }] };
-          } else {
-            message = { role: 'assistant', content: String(data.text) };
-          }
-        }
-        if (message) {
-          useChatStore.setState({ streamingMessage: message });
-        }
-      }
-    });
-
-    // Listen for chat final events (response complete)
-    const unsubChat = window.electron.ipcRenderer.on('gateway:chat-message', (data) => {
-      const chatData = data as Record<string, unknown>;
-      if (chatData._test) return; // skip timer test events
-      const payload = ('message' in chatData && typeof chatData.message === 'object')
-        ? chatData.message as Record<string, unknown>
-        : chatData;
-
-      if (payload.state === 'final' || payload.state === 'complete' || payload.state === 'done') {
-        activeExtRunId = '';
-        // Delay slightly so any last delta can be seen, then reload final messages
-        setTimeout(() => {
-          const s = useChatStore.getState();
-          if (s.sending) {
-            void s.loadHistory(true).then(() => {
-              useChatStore.setState({
-                sending: false,
-                streamingMessage: null,
-                activeRunId: null,
-                streamingTools: [],
-              });
-            });
-          }
-        }, 200);
-      }
-    });
-
-    return () => {
-      unsubNotif?.();
-      unsubChat?.();
-    };
-  }, []);
-
-  // Load data when gateway is running
+  // Load data when gateway is running.
+  // When the store already holds messages for this session (i.e. the user
+  // is navigating *back* to Chat), use quiet mode so the existing messages
+  // stay visible while fresh data loads in the background.  This avoids
+  // an unnecessary messages → spinner → messages flicker.
   useEffect(() => {
     if (!isGatewayRunning) return;
     let cancelled = false;
+    const hasExistingMessages = useChatStore.getState().messages.length > 0;
     (async () => {
       await loadSessions();
       if (cancelled) return;
-      await loadHistory();
+      await loadHistory(hasExistingMessages);
     })();
     return () => {
       cancelled = true;
@@ -205,7 +110,7 @@ export function Chat() {
       {/* Messages Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="max-w-4xl mx-auto space-y-4">
-          {loading ? (
+          {loading && !sending ? (
             <div className="flex h-full items-center justify-center py-20">
               <LoadingSpinner size="lg" />
             </div>

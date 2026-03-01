@@ -61,9 +61,9 @@ Compared with the upstream ClawX, this branch adds support for the [Hi Light](ht
   <img src="resources/screenshot/skills.png" style="width: 100%; height: auto;">
 </p>
 
-<p align="center">
+<!-- <p align="center">
   <img src="resources/screenshot/channels.png" style="width: 100%; height: auto;">
-</p>
+</p> -->
 
 <p align="center">
   <img src="resources/screenshot/dashboard.png" style="width: 100%; height: auto;">
@@ -341,6 +341,14 @@ Join our community to connect with other users, get support, and share your expe
 | Feishu Group |
 | :---: |
 | <img src="src/assets/community/feishu-qr.png" width="150" alt="Feishu QR Code" /> |
+
+---
+
+## Star History
+
+<p align="center">
+  <img src="https://api.star-history.com/svg?repos=ValueCell-ai/ClawX&type=Date" alt="Star History Chart" />
+</p>
 
 ---
 

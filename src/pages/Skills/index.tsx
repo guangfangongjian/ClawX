@@ -748,6 +748,14 @@ export function Skills() {
     }
   }, [t]);
 
+  const [skillsDirPath, setSkillsDirPath] = useState('~/.openclaw/skills');
+
+  useEffect(() => {
+    window.electron.ipcRenderer.invoke('openclaw:getSkillsDir')
+      .then((dir) => setSkillsDirPath(dir as string))
+      .catch(console.error);
+  }, []);
+
   // Handle marketplace search
   const handleMarketplaceSearch = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -772,9 +780,14 @@ export function Skills() {
       await enableSkill(slug);
       toast.success(t('toast.installed'));
     } catch (err) {
-      toast.error(t('toast.failedInstall') + ': ' + String(err));
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      if (['installTimeoutError', 'installRateLimitError'].includes(errorMessage)) {
+        toast.error(t(`toast.${errorMessage}`, { path: skillsDirPath }), { duration: 10000 });
+      } else {
+        toast.error(t('toast.failedInstall') + ': ' + errorMessage);
+      }
     }
-  }, [installSkill, enableSkill, t]);
+  }, [installSkill, enableSkill, t, skillsDirPath]);
 
   // Initial marketplace load (Discovery) - use HTTP API for full list
   // Reset discovery flag when leaving marketplace tab so it retries on re-entry
@@ -913,8 +926,12 @@ export function Skills() {
           {error && (
             <Card className="border-destructive">
               <CardContent className="py-4 text-destructive flex items-center gap-2">
-                <AlertCircle className="h-5 w-5" />
-                {error}
+                <AlertCircle className="h-5 w-5 shrink-0" />
+                <span>
+                  {['fetchTimeoutError', 'fetchRateLimitError', 'timeoutError', 'rateLimitError'].includes(error)
+                    ? t(`toast.${error}`, { path: skillsDirPath })
+                    : error}
+                </span>
               </CardContent>
             </Card>
           )}
@@ -1024,6 +1041,12 @@ export function Skills() {
             {/* CLI Install Section */}
             <CliInstallCard />
 
+            <Card className="border-info/30 bg-info/5">
+              <CardContent className="py-3 text-sm flex items-start gap-2 text-muted-foreground">
+                <Download className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{t('marketplace.manualInstallHint', { path: skillsDirPath })}</span>
+              </CardContent>
+            </Card>
             <div className="flex gap-4">
               <form onSubmit={handleMarketplaceSearch} className="flex-1 flex gap-2">
                 <div className="relative flex-1">
@@ -1089,9 +1112,13 @@ export function Skills() {
 
             {searchError && (
               <Card className="border-destructive/50 bg-destructive/5">
-                <CardContent className="py-3 text-sm text-destructive flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{t('marketplace.searchError')}</span>
+                <CardContent className="py-3 text-sm text-destructive flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    {['searchTimeoutError', 'searchRateLimitError', 'timeoutError', 'rateLimitError'].includes(searchError.replace('Error: ', ''))
+                      ? t(`toast.${searchError.replace('Error: ', '')}`, { path: skillsDirPath })
+                      : t('marketplace.searchError')}
+                  </span>
                 </CardContent>
               </Card>
             )}
