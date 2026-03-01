@@ -183,12 +183,12 @@ function bundlePlugin(nodeModulesRoot, npmName, destDir) {
   }
 
   let realPluginPath;
-  try { realPluginPath = realpathSync(normWin(pkgPath)); } catch { realPluginPath = pkgPath; }
+  try { realPluginPath = realpathSync(pkgPath); } catch { realPluginPath = pkgPath; }
 
   // Copy plugin package itself
-  if (existsSync(normWin(destDir))) rmSync(normWin(destDir), { recursive: true, force: true });
-  mkdirSync(normWin(destDir), { recursive: true });
-  cpSync(normWin(realPluginPath), normWin(destDir), { recursive: true, dereference: true });
+  if (existsSync(destDir)) rmSync(destDir, { recursive: true, force: true });
+  mkdirSync(destDir, { recursive: true });
+  cpSync(realPluginPath, destDir, { recursive: true, dereference: true });
 
   // Collect transitive deps via pnpm virtual store BFS
   const collected = new Map();
@@ -220,7 +220,7 @@ function bundlePlugin(nodeModulesRoot, npmName, destDir) {
       if (name === skipPkg) continue;
       if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) continue;
       let rp;
-      try { rp = realpathSync(normWin(fullPath)); } catch { continue; }
+      try { rp = realpathSync(fullPath); } catch { continue; }
       if (collected.has(rp)) continue;
       collected.set(rp, name);
       const depVirtualNM = getVirtualStoreNodeModules(rp);
@@ -240,8 +240,8 @@ function bundlePlugin(nodeModulesRoot, npmName, destDir) {
     copiedNames.add(pkgName);
     const d = join(destNM, pkgName);
     try {
-      mkdirSync(normWin(dirname(d)), { recursive: true });
-      cpSync(normWin(rp), normWin(d), { recursive: true, dereference: true });
+      mkdirSync(dirname(d), { recursive: true });
+      cpSync(rp, d, { recursive: true, dereference: true });
       count++;
     } catch (e) {
       console.warn(`[after-pack]   Skipped dep ${pkgName}: ${e.message}`);
