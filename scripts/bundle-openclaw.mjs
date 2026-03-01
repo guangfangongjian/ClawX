@@ -133,8 +133,14 @@ queue.push({ nodeModulesDir: openclawVirtualNM, skipPkg: 'openclaw' });
 const SKIP_PACKAGES = new Set([
   'typescript',
   '@playwright/test',
+  'playwright-core',
 ]);
 const SKIP_SCOPES = ['@cloudflare/', '@types/'];
+
+// Skip CUDA and Vulkan extension packages from @node-llama-cpp — they add
+// ~650 MB to the bundle and are not included in upstream builds.
+// Only base platform packages (e.g. @node-llama-cpp/win-x64) are kept.
+const SKIP_PATTERNS = [/-cuda/, /-cuda-ext/, /-vulkan/];
 let skippedDevCount = 0;
 
 while (queue.length > 0) {
@@ -145,7 +151,7 @@ while (queue.length > 0) {
     // Skip the package that owns this virtual store entry (it's the package itself, not a dep)
     if (name === skipPkg) continue;
 
-    if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s))) {
+    if (SKIP_PACKAGES.has(name) || SKIP_SCOPES.some(s => name.startsWith(s)) || SKIP_PATTERNS.some(p => p.test(name))) {
       skippedDevCount++;
       continue;
     }
