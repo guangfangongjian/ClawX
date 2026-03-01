@@ -72,7 +72,7 @@ jobs:
         run: |
           pnpm run build:vite
           pnpm exec zx scripts/bundle-openclaw.mjs
-          pnpm exec zx scripts/bundle-plugins.mjs
+          pnpm exec zx scripts/bundle-openclaw-plugins.mjs
 
       - name: Package
         env:

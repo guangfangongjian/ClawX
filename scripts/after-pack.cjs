@@ -260,7 +260,8 @@ exports.default = async function afterPack(context) {
 
   console.log(`[after-pack] Target: ${platform}/${arch}`);
 
-  const src = join(__dirname, '..', 'build', 'openclaw', 'node_modules');
+  const openclawBuildDir = join(__dirname, '..', 'build', 'openclaw');
+  const src = join(openclawBuildDir, 'node_modules');
 
   let resourcesDir;
   if (platform === 'darwin') {
@@ -275,19 +276,20 @@ exports.default = async function afterPack(context) {
   const nodeModulesRoot = join(__dirname, '..', 'node_modules');
   const pluginsDestRoot = join(resourcesDir, 'openclaw-plugins');
 
-  if (!existsSync(src)) {
-    console.warn('[after-pack] ⚠️  build/openclaw/node_modules not found. Run bundle-openclaw first.');
+  if (!existsSync(openclawBuildDir)) {
+    console.warn('[after-pack] ⚠️  build/openclaw not found. Run bundle-openclaw first.');
     return;
   }
 
-  // 1. Copy node_modules (electron-builder skips it due to .gitignore)
-  const depCount = readdirSync(src, { withFileTypes: true })
-    .filter(d => d.isDirectory() && d.name !== '.bin')
-    .length;
-
-  console.log(`[after-pack] Copying ${depCount} openclaw dependencies to ${dest} ...`);
-  cpSync(src, dest, { recursive: true });
-  console.log('[after-pack] ✅ openclaw node_modules copied.');
+  // 1. Copy entire openclaw directory (electron-builder skips it because
+  //    .gitignore contains "build/" which causes extraResources to be ignored)
+  console.log(`[after-pack] Copying openclaw bundle to ${openclawRoot} ...`);
+  if (existsSync(openclawRoot)) {
+    rmSync(openclawRoot, { recursive: true, force: true });
+  }
+  mkdirSync(openclawRoot, { recursive: true });
+  cpSync(openclawBuildDir, openclawRoot, { recursive: true });
+  console.log('[after-pack] ✅ openclaw bundle copied (including node_modules).');
 
   // 1.1 Bundle OpenClaw plugins directly from node_modules into packaged resources.
   //     This is intentionally done in afterPack (not extraResources) because:
