@@ -106,6 +106,7 @@ const PLATFORM_NATIVE_SCOPES = {
   '@napi-rs': /^canvas-(darwin|linux|win32)-(x64|arm64)/,
   '@img': /^sharp(?:-libvips)?-(darwin|linux|win32)-(x64|arm64)/,
   '@mariozechner': /^clipboard-(darwin|linux|win32)-(x64|arm64|universal)/,
+  '@lydell': /^node-pty-(win32|darwin|linux)-(x64|arm64)/,
 };
 
 function cleanupNativePlatformPackages(nodeModulesDir, platform, arch) {
@@ -330,5 +331,48 @@ exports.default = async function afterPack(context) {
   const nativeRemoved = cleanupNativePlatformPackages(dest, platform, arch);
   if (nativeRemoved > 0) {
     console.log(`[after-pack] ✅ Removed ${nativeRemoved} non-target native platform packages.`);
+  }
+
+  // 5. Platform-specific: strip @node-llama-cpp non-target platform binaries
+  //    Uses non-standard platform names: win (not win32), mac (not darwin)
+  const llamaDir = join(dest, '@node-llama-cpp');
+  if (existsSync(llamaDir)) {
+    const LLAMA_PLATFORM_MAP = { win32: 'win', darwin: 'mac', linux: 'linux' };
+    const llamaPlatform = LLAMA_PLATFORM_MAP[platform] || platform;
+    let llamaRemoved = 0;
+    for (const entry of readdirSync(llamaDir)) {
+      // Match entries like: win-x64, linux-x64-cuda, mac-arm64-metal, etc.
+      const match = entry.match(/^(win|mac|linux)-(x64|arm64|armv7l)/);
+      if (!match) continue;
+      const entryPlatform = match[1];
+      const entryArch = match[2];
+      if (entryPlatform !== llamaPlatform || entryArch !== arch) {
+        try {
+          rmSync(join(llamaDir, entry), { recursive: true, force: true });
+          llamaRemoved++;
+        } catch { /* */ }
+      }
+    }
+    if (llamaRemoved > 0) {
+      console.log(`[after-pack] ✅ @node-llama-cpp: removed ${llamaRemoved} non-target platform dirs (kept ${llamaPlatform}-${arch}*).`);
+    }
+  }
+
+  // 6. Remove dev/unnecessary packages that shouldn't be in production
+  const REMOVE_PACKAGES = ['playwright-core'];
+  for (const pkg of REMOVE_PACKAGES) {
+    const pkgDir = join(dest, pkg);
+    if (existsSync(pkgDir)) {
+      try { rmSync(pkgDir, { recursive: true, force: true }); console.log(`[after-pack] ✅ Removed ${pkg}`); } catch { /* */ }
+    }
+  }
+
+  // 7. Remove temp directories (node-llama-cpp_tmp_*, openai_tmp_*, etc.)
+  if (existsSync(dest)) {
+    for (const entry of readdirSync(dest)) {
+      if (entry.includes('_tmp_')) {
+        try { rmSync(join(dest, entry), { recursive: true, force: true }); } catch { /* */ }
+      }
+    }
   }
 };
